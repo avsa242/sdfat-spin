@@ -247,8 +247,8 @@ PUB FWrite(ptr_buff, nr_bytes): status | nr_write, nr_left, sect_wrsz
     else
         ' grow file: next sector
         ' update file size
-        _fseek_sect++                           ' advance to next sector
-        if (_fseek_sect > fat.clustlastsect{})  ' if last sector of this
+'        _fseek_sect++                           ' advance to next sector
+'        if (_fseek_sect > fat.clustlastsect{})  ' if last sector of this
                                                 '   cluster,
             return ENOTIMPLM                    ' XXX what do we do now?
 
