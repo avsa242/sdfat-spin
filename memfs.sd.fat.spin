@@ -77,10 +77,10 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
 
         repeat 16                               ' check each file in the sector
             fat.fopen(dirent)                   ' get current file's info
-            if fat.direntneverused{}            ' last directory entry
+            if (fat.direntneverused{})          ' last directory entry
                 endofdir := true
                 quit
-            if fat.fileisdeleted{}              ' ignore deleted files
+            if (fat.fileisdeleted{})            ' ignore deleted files
                 next
             str.left(@name_tmp, ptr_str, 8)     ' filename is leftmost 8 chars
             str.right(@ext_tmp, ptr_str, 3)     ' ext. is rightmost 3 chars
@@ -103,10 +103,10 @@ PUB FOpen(fn_str, mode): status
 '       0 if successful,
 '       or error
     status := find(fn_str)                      ' look for file by name
-    if status == ENOTFOUND                      ' not found; what is mode?
-        if mode == WRITE                        ' WRITE? Create the file
+    if (status == ENOTFOUND)                    ' not found; what is mode?
+        if (mode == WRITE)                      ' WRITE? Create the file
             return ENOTIMPLM                    '   XXX not implemented yet
-        elseif mode == READ                     ' READ? It really doesn't exist
+        elseif (mode == READ)                   ' READ? It really doesn't exist
             return ENOTFOUND
     fat.fopen(status & $0F)                     ' mask is to keep within # root dir entries per rds
     _fseek_pos := 0
