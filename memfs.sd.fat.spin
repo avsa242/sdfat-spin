@@ -35,12 +35,18 @@ OBJ
     sd  : "memory.flash.sd.spi"
     fat : "filesystem.block.fat"
     str : "string"
+    ser : "com.serial.terminal.ansi-new"
+    time: "time"
 
 PUB Null{}
 ' This is not a top-level object
 
 PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
+    ser.startrxtx(24, 25, 0, 115200)
+    time.msleep(10)
+    ser.clear
+    ser.strln(@"debug started")
     status := sd.init(SD_CS, SD_SCK, SD_MOSI, SD_MISO)
     if lookdown(status: 1..8)
         mount{}
@@ -94,6 +100,29 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     until endofdir
     return ENOTFOUND
 
+PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev
+' Find a free cluster, starting from cluster # st_from
+'   LIMITATIONS:
+'   * only works on 1st sector of FAT
+    avail := 0
+    fat_ent := st_from
+    sd.rdblock(@_sect_buff, fat.fat1start{})             ' read the FAT
+    repeat
+        sect_offs := (fat_ent * 4)                      ' conv fat entry # to sector offset
+        fat_ent_prev := fat_ent
+        bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)' read next entry in chain
+    while (fat_ent <> fat#MRKR_EOC)
+
+    { starting with the entry immediately after the EOC, look for an unused/available
+        entry }
+    sect_offs := (fat_ent_prev + 1) * 4
+    repeat while (sect_offs < 508)
+        bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
+        if (fat_ent == 0)                               ' found a free one
+            avail := (sect_offs / 4)
+            quit
+        sect_offs += 4                                  ' none yet; next FAT entry
+
 PUB FOpen(fn_str, mode): status
 ' Open file for subsequent operations
 '   Valid values:
@@ -113,6 +142,7 @@ PUB FOpen(fn_str, mode): status
     _fseek_sect := fat.filefirstsect{}          ' initialize current sector with file's first
     _fmode := mode
     return 0
+    'xxx find and cache file's last cluster #?
 
 PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
 ' Read a block of data from current seek position of opened file into ptr_dest
@@ -122,6 +152,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
 '   Returns:
 '       number of bytes actually read,
 '       or error
+    'xxx make sure file is open first
     nr_read := nr_left := 0
 
     ' make sure current seek isn't already at the EOF
@@ -165,6 +196,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr
 '   Returns:
 '       position seeked to,
 '       or error
+    ' xxx make sure file is open first
     if (pos < 0) or (pos => fat.filesize{})     ' catch bad seek positions;
         return EBADSEEK                         '   return error
     longfill(@seek_clust, 0, 5)                 ' clear local vars
@@ -198,18 +230,21 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr
 
 PUB FollowChain{} | fat_sect
 ' Read FAT to get next cluster number in chain
+    ser.strln(@"FollowChain()")
     fat_sect := fat.fileprevclust{} >> 7        ' use high bits of cluster # to
                                                 ' get which sector of the FAT
                                                 ' the cluster # is in
+    ser.printf2(@"fat_sect: %x %d\n\r\n\r", fat_sect, fat_sect)
     sd.rdblock(@_sect_buff, fat.fat1start{} + fat_sect)
 
 PUB FWrite(ptr_buff, nr_bytes): status | nr_write, nr_left, sect_wrsz
-' Write a block of data from current seek position of opened file into ptr_dest
+' Write a block of data from current seek position of opened file
 '   Valid values:
 '       nr_bytes: 1..512, or the size of the file, whichever is smaller
 '   Returns:
 '       number of bytes actually written,
 '       or error
+    ' xxx make sure file is open first
     if (_fmode <> WRITE)                        ' ensure the file is opened
         return EWRONGMODE                       ' in write mode, else fail
 
@@ -239,7 +274,7 @@ PUB FWrite(ptr_buff, nr_bytes): status | nr_write, nr_left, sect_wrsz
         repeat while (nr_left > 0)
             bytefill(@_sect_buff, 0, fat.bytespersect)  ' clear sect buff
             sect_wrsz := (nr_bytes-sect_wrsz) <# 512
-            bytemove(@_sect_buff, ptr_buff+(nr_bytes-nr_left), nr_left)
+            bytemove(@_sect_buff, ptr_buff+(nr_bytes-nr_left), nr_left)'XXX is this count bad?
             status := sd.wrblock(@_sect_buff, _fseek_sect)
             if (status == 512)
                 fseek(_fseek_pos+sect_wrsz)
@@ -252,12 +287,54 @@ PUB FWrite(ptr_buff, nr_bytes): status | nr_write, nr_left, sect_wrsz
                                                 '   cluster,
             return ENOTIMPLM                    ' XXX what do we do now?
 
+PUB owrite_1sect(ptr_buff)
+
+    sd.wrblock(ptr_buff, _fseek_sect)           ' write sector from user buff
+
+PUB owrite_msect(ptr_buff, nr_sect)
+
+    repeat nr_sect
+        sd.wrblock(ptr_buff, _fseek_sect)
+        ptr_buff += 512
+        _fseek_sect++
+
+PUB owrite_mclust(ptr_buff, nr_clust) | clust_nr, sect_nr
+
+    repeat clust_nr from first_clust to nr_clust-1
+        sd.wrblock(ptr_buff, _fseek_sect)
+        _fseek_sect++
+
+PUB xwrite_1sect
+
+PUB xwrite_msect
+
+PUB xwrite_mclust
+
+PUB swrite_1sect
+
+PUB swrite_msect
+
+PUB swrite_mclust
+
+
 
 ' below: temporary, for devel purposes
 
 PUB NextCluster{}: c
     c := 0
     return fat.nextcluster
+
+pub fat1sect
+
+    return fat.fat1start
+
+pub spc
+
+    return fat.sectorspercluster
+
+pub datareg
+
+    return fat.datastart
 
 pub filenextclust
 
@@ -282,6 +359,14 @@ pub filefirstsect{}
 pub readsect(ptr, sect)
 
     sd.rdblock_lsbf(ptr, 512, sect)
+
+pub rds
+
+    return fat.rootdirsector
+
+pub writesect(ptr, sect)
+
+    sd.wrblock(ptr, sect)
 
 pub getpos
 
