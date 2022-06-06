@@ -25,10 +25,9 @@ CON
     ERDIO       = -513 {$ff_ff_fd_ff}           ' I/O error (reading)
 
 ' File open modes
-    O_READ      = (1 << 0)                      ' R
+    O_RDONLY    = (1 << 0)                      ' R
     O_WRITE     = (1 << 1)                      ' W (writes _overwrite_)
-    O_RDWR      = O_READ | O_WRITE              ' R/W
-    O_APPEND    = (1 << 3) | O_WRITE            ' R/W (writes _always_ to the end of the file)
+    O_RDWR      = O_RDONLY | O_WRITE            ' R/W
 
 VAR
 
@@ -69,6 +68,35 @@ PUB Mount{}: status
 
     sd.rdblock(@_sect_buff, fat.partstart{})    ' now read that sector into sector buffer
     fat.syncbpb{}                               ' update all of the FAT fs data from it
+
+PUB AllocClust{}: status | avail, last, tmp, resp
+' Allocate a new cluster
+    ifnot (lookdown(_fmode: O_RMWR, O_WRITE, O_APPEND))
+        return EWRONGMODE
+
+    { find a free cluster, starting from the file's first cluster }
+    avail := findfreeclust(fat.filefirstclust{})
+    if (avail < 3)
+        return avail                            ' catch err from FindFreeClust()
+    last := findlastclust{}
+    bytefill(@_sect_buff, 0, 512)
+    resp := sd.rdblock(@_sect_buff, fat.fat1start{})
+    if (resp <> 512)
+        return ERDIO
+
+    { overwrite the FAT entry currently marked as the EOC with a pointer to
+        the next available entry }
+    bytemove(@_sect_buff+(last*4), @avail, 4)
+
+    { write the EOC marker into the newly allocated entry }
+    tmp := fat#MRKR_EOC
+    bytemove(@_sect_buff+(avail*4), @tmp, 4)
+
+    { write the updated FAT sector to SD }
+    resp := sd.wrblock(@_sect_buff, fat.fat1start{})
+    if (resp <> 512)
+        return EWRIO
+    return avail
 
 PUB FClose{}: status
 ' Close the currently opened file
@@ -151,12 +179,10 @@ PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
 ' Find last cluster # of file
 '   LIMITATIONS:
 '       * stays on first sector of FAT
-    ser.strln(@"FindLastClust():")
     cl_nr := 0
     fat_ent := fat.filefirstclust{}
     resp := sd.rdblock(@_sect_buff, fat.fat1start{})    ' read the FAT
     if (resp <> 512)
-        ser.printf1(@"err: %x\n\r", resp)
         return ERDIO                            ' catch read error from SD
     repeat
         sect_offs := (fat_ent * 4)              ' conv fat entry # to sector offset
@@ -176,11 +202,8 @@ PUB FOpen(fn_str, mode): status
 '       or error
     'xxx test already open
     status := find(fn_str)                      ' look for file by name
-    if (status == ENOTFOUND)                    ' not found; what is mode?
-        if (mode == O_WRITE)                    ' WRITE? Create the file
-            return ENOTIMPLM                    '   XXX not implemented yet
-        elseif (mode == O_READ)                 ' READ? It really doesn't exist
-            return ENOTFOUND
+    if (status == ENOTFOUND)                    ' file not found
+        return ENOTFOUND
     fat.fopen(status & $0F)                     ' mask is to keep within # root dir entries per rds
     _fseek_pos := 0
     _fseek_sect := fat.filefirstsect{}          ' initialize current sector with file's first
@@ -195,7 +218,6 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '   Returns:
 '       number of bytes actually read,
 '       or error
-    ser.strln(@"FRead():")
     ifnot (fat.filenum{})                       ' no file open
         return ENOTOPEN
 
@@ -275,96 +297,21 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     _sect_offs := (pos // fat.bytespersect{})
     return pos
 
-PUB f_owrite(ptr_buff, len): status | sect_wrsz, nr_left
-' Write to file (overwrite - limited to current cluster)
+PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
+' Write buffer to card
+'   ptr_buff: address of buffer to write to SD
+'   len: number of bytes to write from buffer
+'       NOTE: a full sector is always written
     ifnot (fat.filenum{})
         return ENOTOPEN
-    ser.strln(@"f_owrite():")
-    nr_left := len                              ' init to total write length
-    repeat while (nr_left > 0)
-        ser.printf1(@"sect_offs = %d\n\r", _sect_offs)
-        sect_wrsz := (512 - _sect_offs) <# nr_left
-        bytefill(@_sect_buff, 0, fat.bytespersect{})
-        { copy the next chunk of data to the sector buffer }
-        bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)
-
-        status := sd.wrblock(@_sect_buff, _fseek_sect)
-        if (status == 512)
-            { update position to advance by how much was just written }
-            fseek(_fseek_pos+sect_wrsz)
-            nr_left -= sect_wrsz
-            ser.printf1(@"fseek: %d\n\r", _fseek_pos)
-            ser.printf1(@"nr_left: %d\n\r", nr_left)
-        else
-            return EWRIO
-
-PUB f_append(ptr_buff, len): status | sect_wrsz, nr_left
-' Write to file (append only)
-    ser.strln(@"f_append():")
-    ifnot (fat.filenum{})
-        return ENOTOPEN
-    nr_left := len                              ' init to total write length
-    fseek(fat.filesize)                         ' point to end of file
-    repeat while (nr_left > 0)
-        ser.printf1(@"sect_offs = %d\n\r", _sect_offs)
-        sect_wrsz := (512 - _sect_offs) <# nr_left
-        bytefill(@_sect_buff, 0, fat.bytespersect{})
-        { copy the next chunk of data to the sector buffer }
-        bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)
-
-        status := sd.wrblock(@_sect_buff, _fseek_sect)
-        if (status == 512)
-            { update position to advance by how much was just written }
-            fseek(_fseek_pos+sect_wrsz)
-            nr_left -= sect_wrsz
-            ser.printf1(@"fseek: %d\n\r", _fseek_pos)
-            ser.printf1(@"nr_left: %d\n\r", nr_left)
-        else
-            return EWRIO
-
-PUB AllocClust{}: status | avail, last, tmp, resp
-' Allocate a new cluster
-    ser.strln(@"AllocClust():")
-    ifnot (lookdown(_fmode: O_RMWR, O_WRITE, O_APPEND))
+    ifnot (_fmode & O_WRITE)
         return EWRONGMODE
 
-    { find a free cluster, starting from the file's first cluster }
-    avail := findfreeclust(fat.filefirstclust{})
-    if (avail < 3)
-        ser.printf1(@"findfreeclust err: %x\n\r", avail)
-        return avail                            ' catch err from FindFreeClust()
-    last := findlastclust{}
-    bytefill(@_sect_buff, 0, 512)
-    resp := sd.rdblock(@_sect_buff, fat.fat1start{})
-    if (resp <> 512)
-        ser.printf1(@"rdblock fat1start err: %x\n\r", resp)
-        return ERDIO
-
-    { overwrite the FAT entry currently marked as the EOC with a pointer to
-        the next available entry }
-    bytemove(@_sect_buff+(last*4), @avail, 4)
-
-    { write the EOC marker into the newly allocated entry }
-    tmp := fat#MRKR_EOC
-    bytemove(@_sect_buff+(avail*4), @tmp, 4)
-
-    { write the updated FAT sector to SD }
-    resp := sd.wrblock(@_sect_buff, fat.fat1start{})
-    if (resp <> 512)
-        ser.printf1(@"wrblock fat1start %x\n\r", resp)
-        return resp'EWRIO
-    ser.printf1(@"ok, ret: %x\n\r", avail)
-    return avail
-
-PUB f_rmwrite(ptr_buff, len): status | sect_wrsz, nr_left
-' Write to file (read, modify, write - limited to current cluster)
-    ifnot (fat.filenum{})
-        return ENOTOPEN
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
-        sect_wrsz := (512 - _sect_offs) <# nr_left
+        sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
         bytefill(@_sect_buff, 0, fat.bytespersect{})
-'        if (_fmode == O_RMWR)                   ' read-modify-write mode
+        if (_fmode & O_RMW)                     ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
             sd.rdblock(@_sect_buff, _fseek_sect)
 
@@ -372,7 +319,7 @@ PUB f_rmwrite(ptr_buff, len): status | sect_wrsz, nr_left
         bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)
 
         status := sd.wrblock(@_sect_buff, _fseek_sect)
-        if (status == 512)
+        if (status == sd#SECT_SZ)
             { update position to advance by how much was just written }
             fseek(_fseek_pos+sect_wrsz)
             nr_left -= sect_wrsz
@@ -380,7 +327,6 @@ PUB f_rmwrite(ptr_buff, len): status | sect_wrsz, nr_left
 PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
-    ser.strln(@"readfat():")
     resp := sd.rdblock(@_sect_buff, (fat.fat1start + fat_sect))
 
 ' below: temporary, for devel purposes
