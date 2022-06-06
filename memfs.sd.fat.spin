@@ -200,7 +200,8 @@ PUB FOpen(fn_str, mode): status
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
-    'xxx test already open
+    if (fat.filenum{})                          ' file is already open
+        return EOPEN
     status := find(fn_str)                      ' look for file by name
     if (status == ENOTFOUND)                    ' file not found
         return ENOTFOUND
@@ -223,7 +224,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 
     nr_read := nr_left := 0
 
-    ' make sure current seek isn't already at the EOF
+    { make sure current seek isn't already at the EOF }
     if (_fseek_pos < fat.filesize{})
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
@@ -236,13 +237,13 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
             return ERDIO
 
         movbytes := fat.bytespersect{}-_sect_offs
-        bytemove(ptr_dest, @_sect_buff+_sect_offs, movbytes <# nr_bytes)
+        bytemove(ptr_dest, (@_sect_buff+_sect_offs), movbytes <# nr_bytes)
         nr_read := (nr_read + movbytes) <# nr_bytes
         nr_left := (nr_bytes - nr_read)
 
         if (nr_left > 0)
-            ' read the next block from the SD card, and copy the remainder
-            '   of the requested length into the user's buffer
+            { read the next block from the SD card, and copy the remainder
+                of the requested length into the user's buffer }
             sd.rdblock(@_sect_buff, _fseek_sect)
             bytemove(ptr_dest+nr_read, @_sect_buff, nr_left)
             nr_read += nr_left
@@ -260,7 +261,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '       or error
     ifnot (fat.filenum{})
         return ENOTOPEN                         ' no file open
-    if (pos < 0) or (pos => fat.filesize{})     ' catch bad seek positions;
+    if ((pos < 0) or (pos => fat.filesize{}))   ' catch bad seek positions;
         return EBADSEEK                         '   return error
     longfill(@seek_clust, 0, 4)                 ' clear local vars
 
@@ -309,6 +310,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
+        { how much of the total to write to this sector }
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
         bytefill(@_sect_buff, 0, fat.bytespersect{})
         if (_fmode & O_RMW)                     ' read-modify-write mode
