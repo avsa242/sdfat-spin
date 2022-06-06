@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Aug 1, 2021
-    Updated Jan 23, 2022
+    Updated Jun 6, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -187,7 +187,7 @@ PUB FOpen(fn_str, mode): status
     _fmode := mode
     return fat.filenum{}
 
-PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
+PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 ' Read a block of data from current seek position of opened file into ptr_dest
 '   Valid values:
 '       ptr_dest: pointer to buffer to copy data read
@@ -195,6 +195,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
 '   Returns:
 '       number of bytes actually read,
 '       or error
+    ser.strln(@"FRead():")
     ifnot (fat.filenum{})                       ' no file open
         return ENOTOPEN
 
@@ -204,24 +205,18 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
     if (_fseek_pos < fat.filesize{})
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
-        nr_bytes := nr_bytes <# fat.bytespersect{} <# fat.filesize{} {
-}       <# (fat.filesize{}-_fseek_pos) ' XXX seems like this should be -1
+        nr_bytes := nr_bytes <# fat.bytespersect{} <# fat.filesize{} <# (fat.filesize{}-_fseek_pos) ' XXX seems like this should be -1
 
         { read a block from the SD card into the internal sector buffer,
             and copy as many bytes as possible from it into the user's buffer }
-        sd.rdblock(@_sect_buff, _fseek_sect)
+        resp := sd.rdblock(@_sect_buff, _fseek_sect)
+        if (resp < 1)
+            return ERDIO
+
         movbytes := fat.bytespersect{}-_sect_offs
         bytemove(ptr_dest, @_sect_buff+_sect_offs, movbytes <# nr_bytes)
         nr_read := (nr_read + movbytes) <# nr_bytes
         nr_left := (nr_bytes - nr_read)
-
-        _fseek_sect++                           ' advance to next sector
-        if (_fseek_sect > fat.clustlastsect{})  ' if last sector of this
-            followchain{}                       '   cluster is reached,
-            if (nextcluster{} <> -1)            '   advance to next cluster
-                _fseek_sect := fat.clust2sect(fat.filenextclust{})
-            else
-                return EEOF                     ' no more clusters; end of file
 
         if (nr_left > 0)
             ' read the next block from the SD card, and copy the remainder
@@ -229,12 +224,12 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes
             sd.rdblock(@_sect_buff, _fseek_sect)
             bytemove(ptr_dest+nr_read, @_sect_buff, nr_left)
             nr_read += nr_left
-        _fseek_pos += nr_read                   ' update seek pointer
+        fseek(_fseek_pos + nr_read)             ' update seek pointer
         return nr_read
     else
         return EEOF                             ' reached end of file
 
-PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr
+PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
 '   Valid values:
 '       pos: 0 to file size-1
@@ -261,9 +256,15 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr
     rel_sect_nr := (clust_offs >> 9)
 
     { follow the cluster chain to determine which actual cluster it is }
+    fat_sect := (clust_nr >> 7)
+    readfat(fat_sect)
     repeat seek_clust
-        followchain{}
-        clust_nr := fat.nextcluster{}
+        { 128 clusters per FAT sector (0..127), so any bits above bit 7
+            can be used to determine which sector of the FAT should be read }
+        sect_offs := (clust_nr * 4)              ' conv fat entry # to sector offset
+        { read next entry in chain }
+        bytemove(@clust_nr, (@_sect_buff + sect_offs), 4)
+        sect_offs += 4
 
     { set the absolute sector number and the seek position for subsequent R/W:
         translate the cluster number to a sector number on the SD card, and add the
@@ -273,15 +274,6 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr
     _fseek_pos := pos
     _sect_offs := (pos // fat.bytespersect{})
     return pos
-
-PUB FollowChain{} | fat_sect
-' Read FAT to get next cluster number in chain
-    ser.strln(@"FollowChain()")
-    fat_sect := fat.fileprevclust{} >> 7        ' use high bits of cluster # to
-                                                ' get which sector of the FAT
-                                                ' the cluster # is in
-    ser.printf2(@"fat_sect: %x %d\n\r\n\r", fat_sect, fat_sect)
-    sd.rdblock(@_sect_buff, fat.fat1start{} + fat_sect)
 
 PUB f_owrite(ptr_buff, len): status | sect_wrsz, nr_left
 ' Write to file (overwrite - limited to current cluster)
@@ -385,6 +377,11 @@ PUB f_rmwrite(ptr_buff, len): status | sect_wrsz, nr_left
             fseek(_fseek_pos+sect_wrsz)
             nr_left -= sect_wrsz
 
+PUB ReadFAT(fat_sect): resp
+' Read the FAT into the sector buffer
+'   fat_sect: sector of the FAT to read
+    ser.strln(@"readfat():")
+    resp := sd.rdblock(@_sect_buff, (fat.fat1start + fat_sect))
 
 ' below: temporary, for devel purposes
 
