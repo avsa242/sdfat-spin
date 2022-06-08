@@ -64,10 +64,10 @@ PUB Mount{}: status
 '   Read SD card boot sector and sync filesystem info
     fat.init(@_sect_buff)                       ' point FATfs object to sector buffer
     sd.rdblock(@_sect_buff, 0)                  ' read boot sector into sector buffer
-    fat.syncpart{}                              ' get sector # of 1st partition
+    fat.readpart{}                              ' get sector # of 1st partition
 
     sd.rdblock(@_sect_buff, fat.partstart{})    ' now read that sector into sector buffer
-    fat.syncbpb{}                               ' update all of the FAT fs data from it
+    fat.readbpb{}                               ' update all of the FAT fs data from it
 
 PUB AllocClust{}: status | avail, last, tmp, resp
 ' Allocate a new cluster
@@ -75,7 +75,7 @@ PUB AllocClust{}: status | avail, last, tmp, resp
         return EWRONGMODE
 
     { find a free cluster, starting from the file's first cluster }
-    avail := findfreeclust(fat.filefirstclust{})
+    avail := findfreeclust(fat.ffirstclust{})
     if (avail < 3)
         return avail                            ' catch err from FindFreeClust()
     last := findlastclust{}
@@ -89,7 +89,7 @@ PUB AllocClust{}: status | avail, last, tmp, resp
     bytemove(@_sect_buff+(last*4), @avail, 4)
 
     { write the EOC marker into the newly allocated entry }
-    tmp := fat#MRKR_EOC
+    tmp := fat#CLUST_EOC
     bytemove(@_sect_buff+(avail*4), @tmp, 4)
 
     { write the updated FAT sector to SD }
@@ -98,12 +98,16 @@ PUB AllocClust{}: status | avail, last, tmp, resp
         return EWRIO
     return avail
 
+PUB DirentNeverUsed{}: flag
+
+    return fat.direntneverused{}
+
 PUB FClose{}: status
 ' Close the currently opened file
 '   Returns:
 '       0 on success
 '       ENOTOPEN if a file isn't currently open
-    ifnot (fat.filenum{})
+    ifnot (fat.fnum{})
         return ENOTOPEN                         ' file isn't open
     _fseek_pos := 0
     _fseek_sect := 0
@@ -111,9 +115,17 @@ PUB FClose{}: status
     fat.fclose{}
     return 0
 
+PUB FDateCreated{}: d
+
+    return fat.fdatecreated{}
+
+PUB FDeleted{}: flag
+
+    return fat.fdeleted{}
+
 PUB FileSize{}: sz
 ' Get size of opened file
-    return fat.filesize{}
+    return fat.fsize{}
 
 PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], ext_uc[2]
 ' Find file, by name
@@ -126,22 +138,22 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     rds := 0
     endofdir := false
     repeat                                      ' check each rootdir sector
-        sd.rdblock(@_sect_buff, fat.rootdirsector{}+rds)
+        sd.rdblock(@_sect_buff, fat.rootdirsect{}+rds)
         dirent := 0
 
         repeat 16                               ' check each file in the sector
-            fat.fopen(dirent)                   ' get current file's info
+            fat.fopenent(dirent)                ' get current file's info
             if (fat.direntneverused{})          ' last directory entry
                 endofdir := true
                 quit
-            if (fat.fileisdeleted{})            ' ignore deleted files
+            if (fat.fdeleted{})                 ' ignore deleted files
                 next
             str.left(@name_tmp, ptr_str, 8)     ' filename is leftmost 8 chars
             str.right(@ext_tmp, ptr_str, 3)     ' ext. is rightmost 3 chars
             name_uc := str.upper(@name_tmp)     ' convert to uppercase
             ext_uc := str.upper(@ext_tmp)
-            if strcomp(fat.filename{}, name_uc) and {
-}           strcomp(fat.filenameext{}, ext_uc)  ' match found for filename; get
+            if strcomp(fat.fname{}, name_uc) and {
+}           strcomp(fat.fnameext{}, ext_uc)  ' match found for filename; get
                 return dirent+(rds * 16)        '   number relative to entr. 0
             dirent++
         rds++                                   ' go to next root dir sector
@@ -180,7 +192,7 @@ PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
 '   LIMITATIONS:
 '       * stays on first sector of FAT
     cl_nr := 0
-    fat_ent := fat.filefirstclust{}
+    fat_ent := fat.ffirstclust{}
     resp := sd.rdblock(@_sect_buff, fat.fat1start{})    ' read the FAT
     if (resp <> 512)
         return ERDIO                            ' catch read error from SD
@@ -192,6 +204,22 @@ PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
     while (fat_ent <> fat#MRKR_EOC)
     return (sect_offs / 4)
 
+PUB FIsDir{}: status
+
+    return fat.fisdir{}
+
+PUB FIsVolNm{}: status
+
+    return fat.fisvolnm{}
+
+PUB FName{}: ptr_str
+
+    return fat.fname{}
+
+PUB FNameExt{}: ptr_str
+
+    return fat.fnameext{}
+
 PUB FOpen(fn_str, mode): status
 ' Open file for subsequent operations
 '   Valid values:
@@ -200,16 +228,28 @@ PUB FOpen(fn_str, mode): status
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
-    if (fat.filenum{})                          ' file is already open
+    if (fat.fnum{})                             ' file is already open
         return EOPEN
     status := find(fn_str)                      ' look for file by name
     if (status == ENOTFOUND)                    ' file not found
         return ENOTFOUND
-    fat.fopen(status & $0F)                     ' mask is to keep within # root dir entries per rds
+    fat.fopenent(status & $0F)                  ' mask is to keep within # root dir entries per rds
     _fseek_pos := 0
-    _fseek_sect := fat.filefirstsect{}          ' initialize current sector with file's first
+    _fseek_sect := fat.ffirstsect{}             ' initialize current sector with file's first
     _fmode := mode
-    return fat.filenum{}
+    return fat.fnum{}
+
+PUB FOpenEnt(fnum, mode): status
+
+    if (fat.fnum{})
+        return EOPEN
+    sd.rdblock(@_sect_buff, fat.rootdirsect{} + (fnum >> 4))
+    fat.fopenent(fnum & $0f)
+    'xxx validate good dirent
+    _fseek_pos := 0
+    _fseek_sect := fat.ffirstsect{}             ' initialize current sector with file's first
+    _fmode := mode
+    return fat.fnum{}
 
 PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 ' Read a block of data from current seek position of opened file into ptr_dest
@@ -219,16 +259,16 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '   Returns:
 '       number of bytes actually read,
 '       or error
-    ifnot (fat.filenum{})                       ' no file open
+    ifnot (fat.fnum{})                       ' no file open
         return ENOTOPEN
 
     nr_read := nr_left := 0
 
     { make sure current seek isn't already at the EOF }
-    if (_fseek_pos < fat.filesize{})
+    if (_fseek_pos < fat.fsize{})
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
-        nr_bytes := nr_bytes <# fat.bytespersect{} <# fat.filesize{} <# (fat.filesize{}-_fseek_pos) ' XXX seems like this should be -1
+        nr_bytes := nr_bytes <# fat.sectsz{} <# fat.fsize{} <# (fat.fsize{}-_fseek_pos) ' XXX seems like this should be -1
 
         { read a block from the SD card into the internal sector buffer,
             and copy as many bytes as possible from it into the user's buffer }
@@ -236,7 +276,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         if (resp < 1)
             return ERDIO
 
-        movbytes := fat.bytespersect{}-_sect_offs
+        movbytes := fat.sectsz{}-_sect_offs
         bytemove(ptr_dest, (@_sect_buff+_sect_offs), movbytes <# nr_bytes)
         nr_read := (nr_read + movbytes) <# nr_bytes
         nr_left := (nr_bytes - nr_read)
@@ -259,20 +299,20 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '   Returns:
 '       position seeked to,
 '       or error
-    ifnot (fat.filenum{})
+    ifnot (fat.fnum{})
         return ENOTOPEN                         ' no file open
-    if ((pos < 0) or (pos => fat.filesize{}))   ' catch bad seek positions;
+    if ((pos < 0) or (pos => fat.fsize{}))   ' catch bad seek positions;
         return EBADSEEK                         '   return error
     longfill(@seek_clust, 0, 4)                 ' clear local vars
 
     { initialize cluster number with the file's first cluster number }
-    clust_nr := fat.filefirstclust{}
+    clust_nr := fat.ffirstclust{}
 
     { determine which cluster (in "n'th" terms) in the chain the seek pos. is }
-    seek_clust := (pos / fat.bytesperclust{})
+    seek_clust := (pos / fat.clustsz{})
 
     { use remainder to get byte offset within cluster (0..cluster size-1) }
-    clust_offs := (pos // fat.bytesperclust{})
+    clust_offs := (pos // fat.clustsz{})
 
     { use high bits of offset within cluster to get sector offset (0..sectors per cluster-1)
         within the cluster }
@@ -295,15 +335,23 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
         also, set offset within sector to find the start of the data (0..bytes per sector-1) }
     _fseek_sect := fat.clust2sect(clust_nr)+rel_sect_nr
     _fseek_pos := pos
-    _sect_offs := (pos // fat.bytespersect{})
+    _sect_offs := (pos // fat.sectsz{})
     return pos
+
+PUB FSize{}: sz
+
+    return fat.fsize{}
+
+PUB FTimeCreated{}: t
+
+    return fat.ftimecreated{}
 
 PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
 ' Write buffer to card
 '   ptr_buff: address of buffer to write to SD
 '   len: number of bytes to write from buffer
 '       NOTE: a full sector is always written
-    ifnot (fat.filenum{})
+    ifnot (fat.fnum{})
         return ENOTOPEN
     ifnot (_fmode & O_WRITE)
         return EWRONGMODE
@@ -312,8 +360,8 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
     repeat while (nr_left > 0)
         { how much of the total to write to this sector }
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
-        bytefill(@_sect_buff, 0, fat.bytespersect{})
-        if (_fmode & O_RMW)                     ' read-modify-write mode
+        bytefill(@_sect_buff, 0, fat.sectsz{})
+        if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
             sd.rdblock(@_sect_buff, _fseek_sect)
 
@@ -335,51 +383,47 @@ PUB ReadFAT(fat_sect): resp
 
 PUB NextCluster{}: c
     c := 0
-    return fat.nextcluster
+    return fat.nextclust
 
 pub fat1start
 
     return fat.fat1start
 
-pub sectorspercluster
+pub sectsperclust
 
-    return fat.sectorspercluster
+    return fat.sectsperclust
 
-pub datastart
+pub fnextclust
 
-    return fat.datastart
+    return fat.fnextclust
 
-pub filenextclust
+pub clustsz
 
-    return fat.filenextclust
-
-pub bytesperclust
-
-    return fat.bytesperclust
+    return fat.clustsz
 
 pub clust2sect(c): s
 
     return fat.clust2sect(c)
 
-pub filefirstclust{}
+pub ffirstclust{}
 
-    return fat.filefirstclust
+    return fat.ffirstclust
 
-pub filefirstsect{}
+pub ffirstsect{}
 
-    return fat.filefirstsect
+    return fat.ffirstsect
 
 pub filenum
 
-    return fat.filenum
+    return fat.fnum
 
 pub rdblock(ptr, sect)
 
     return sd.rdblock(ptr, sect)
 
-pub rootdirsector
+pub rootdirsect
 
-    return fat.rootdirsector
+    return fat.rootdirsect
 
 pub wrblock(ptr, sect): resp
 
