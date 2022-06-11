@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Aug 1, 2021
-    Updated Jun 6, 2022
+    Updated Jun 11, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -153,7 +153,7 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             name_uc := str.upper(@name_tmp)     ' convert to uppercase
             ext_uc := str.upper(@ext_tmp)
             if strcomp(fat.fname{}, name_uc) and {
-}           strcomp(fat.fnameext{}, ext_uc)  ' match found for filename; get
+}           strcomp(fat.fnameext{}, ext_uc)     ' match found for filename; get
                 return dirent+(rds * 16)        '   number relative to entr. 0
             dirent++
         rds++                                   ' go to next root dir sector
@@ -175,7 +175,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
         fat_ent_prev := fat_ent
         { read next entry in chain }
         bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
-    while (fat_ent <> fat#MRKR_EOC)
+    while (fat_ent <> fat#CLUST_EOC)
 
     { starting with the entry immediately after the EOC, look for an unused/available
         entry }
@@ -259,7 +259,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '   Returns:
 '       number of bytes actually read,
 '       or error
-    ifnot (fat.fnum{})                       ' no file open
+    ifnot (fat.fnum{})                          ' no file open
         return ENOTOPEN
 
     nr_read := nr_left := 0
@@ -301,7 +301,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '       or error
     ifnot (fat.fnum{})
         return ENOTOPEN                         ' no file open
-    if ((pos < 0) or (pos => fat.fsize{}))   ' catch bad seek positions;
+    if ((pos < 0) or (pos => fat.fsize{}))      ' catch bad seek positions;
         return EBADSEEK                         '   return error
     longfill(@seek_clust, 0, 4)                 ' clear local vars
 
