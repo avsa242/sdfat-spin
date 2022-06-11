@@ -62,16 +62,37 @@ PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 PUB Mount{}: status
 ' Mount SD card
 '   Read SD card boot sector and sync filesystem info
-    fat.init(@_sect_buff)                       ' point FATfs object to sector buffer
-    sd.rdblock(@_sect_buff, 0)                  ' read boot sector into sector buffer
-    fat.readpart{}                              ' get sector # of 1st partition
+'   Returns:
+'       0 on success
+'       negative number on error
+    status := 0
 
-    sd.rdblock(@_sect_buff, fat.partstart{})    ' now read that sector into sector buffer
-    fat.readbpb{}                               ' update all of the FAT fs data from it
+    { point FATfs object to sector buffer }
+    fat.init(@_sect_buff)
+
+    { read the MBR }
+    status := sd.rdblock(@_sect_buff, fat#MBR)
+    if (status < 0)
+        return status
+
+    { get 1st partition's 1st sector number from it }
+    status := fat.readpart{}
+    if (status < 0)
+        return status
+
+    { now read that sector }
+    status := sd.rdblock(@_sect_buff, fat.partstart{})
+    if (status < 0)
+        return status
+
+    { sync the FATfs metadata from it }
+    status := fat.readbpb{}
+    if (status < 0)
+        return status
 
 PUB AllocClust{}: status | avail, last, tmp, resp
 ' Allocate a new cluster
-    ifnot (lookdown(_fmode: O_RMWR, O_WRITE, O_APPEND))
+    ifnot (lookdown(_fmode: O_RDWR, O_WRITE))
         return EWRONGMODE
 
     { find a free cluster, starting from the file's first cluster }
@@ -101,6 +122,10 @@ PUB AllocClust{}: status | avail, last, tmp, resp
 PUB DirentNeverUsed{}: flag
 
     return fat.direntneverused{}
+
+PUB FAttrs{}: attr_bits
+
+    return fat.fattrs{}
 
 PUB FClose{}: status
 ' Close the currently opened file
@@ -224,7 +249,7 @@ PUB FOpen(fn_str, mode): status
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
-'       mode: READ (0), or WRITE (1)
+'       mode: O_RDONLY (1), or O_WRITE (2), O_RDWR (3)
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
@@ -240,7 +265,13 @@ PUB FOpen(fn_str, mode): status
     return fat.fnum{}
 
 PUB FOpenEnt(fnum, mode): status
-
+' Open file by dirent # for subsequent operations
+'   Valid values:
+'       fnum: directory entry number
+'       mode: O_RDONLY (1), O_WRITE (2), O_RDWR (3)
+'   Returns:
+'       file number (dirent #) if successful,
+'       or error
     if (fat.fnum{})
         return EOPEN
     sd.rdblock(@_sect_buff, fat.rootdirsect{} + (fnum >> 4))
@@ -352,9 +383,9 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
 '   len: number of bytes to write from buffer
 '       NOTE: a full sector is always written
     ifnot (fat.fnum{})
-        return ENOTOPEN
+        return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
-        return EWRONGMODE
+        return EWRONGMODE                       ' must be open for writing
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
