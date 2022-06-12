@@ -19,6 +19,7 @@ CON
     EWRONGMODE  = -5                            ' illegal operation for file mode
     EOPEN       = -6                            ' already open
     ENOTOPEN    = -7                            ' no file open
+    ECL_INUSE   = -8                            ' cluster in use
 
     ENOTIMPLM   = -256                          ' not implemented
     EWRIO       = -512 {$ff_ff_e0_00}           ' I/O error (writing)
@@ -43,15 +44,15 @@ OBJ
     ser : "com.serial.terminal.ansi-new"
     time: "time"
 
-PUB Null{}
-' This is not a top-level object
+'PUB Null{}
+'' This is not a top-level object
 
 PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
     ser.startrxtx(24, 25, 0, 115200)
     time.msleep(10)
     ser.clear
-    ser.strln(@"SD/FAT debug started")
+    ser.strln(string("SD/FAT debug started"))
     status := sd.init(SD_CS, SD_SCK, SD_MOSI, SD_MISO)
     if lookdown(status: 1..8)
         mount{}
@@ -89,34 +90,40 @@ PUB Mount{}: status
     if (status < 0)
         return status
 
-PUB AllocClust{}: status | avail, last, tmp, resp
+PUB AllocClust(cl_nr): status | tmp
 ' Allocate a new cluster
-    ifnot (lookdown(_fmode: O_RDWR, O_WRITE))
+    ser.strln(string("AllocClust():"))
+    ifnot (_fmode & O_WRITE)                    ' file must be opened for writing
+        ser.strln(string("bad file mode"))
         return EWRONGMODE
 
-    { find a free cluster, starting from the file's first cluster }
-    avail := findfreeclust(ffirstclust{})
-    if (avail < 3)
-        return avail                            ' catch err from FindFreeClust()
-    last := findlastclust{}
+    { read FAT sector }
     bytefill(@_sect_buff, 0, 512)
-    resp := sd.rdblock(@_sect_buff, fat1start{})
-    if (resp <> 512)
+    status := sd.rdblock(@_sect_buff, fat1start{})
+    if (status <> 512)
+        ser.strln(string("read error"))
         return ERDIO
 
-    { overwrite the FAT entry currently marked as the EOC with a pointer to
-        the next available entry }
-    bytemove(@_sect_buff+(last*4), @avail, 4)
+    { test the requested cluster number - is it free? }
+    tmp := 0
+    bytemove(@tmp, @_sect_buff+(cl_nr*4), 4)
+    if (tmp <> 0)
+        ser.strln(@"cluster in use")
+        return ECL_INUSE
 
     { write the EOC marker into the newly allocated entry }
     tmp := CLUST_EOC
-    bytemove(@_sect_buff+(avail*4), @tmp, 4)
+    bytemove(@_sect_buff+(cl_nr*4), @tmp, 4)
 
     { write the updated FAT sector to SD }
-    resp := sd.wrblock(@_sect_buff, fat1start{})
-    if (resp <> 512)
+    ser.strln(string("updated FAT: "))
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+    status := sd.wrblock(@_sect_buff, fat1start{})
+    if (status <> 512)
+        ser.strln(string("write error"))
         return EWRIO
-    return avail
+
+    return cl_nr
 
 PUB FClose2{}: status
 ' Close the currently opened file
@@ -173,17 +180,22 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
 '   LIMITATIONS:
 '   * only works on 1st sector of FAT
 '   * doesn't return to the beginning of the FAT to look before the file's first cluster
+    ser.strln(string("FindFreeClust():"))
     avail := 0
     fat_ent := st_from
     resp := sd.rdblock(@_sect_buff, fat1start{})    ' read the FAT
     if (resp <> 512)
+        ser.strln(string("read error"))
         return ERDIO
     repeat
         sect_offs := (fat_ent * 4)              ' conv fat entry # to sector offset
         fat_ent_prev := fat_ent
         { read next entry in chain }
         bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
+        ser.printf1(@"sect_offs: %d\n\r", sect_offs)
+        time.msleep(500)
     while (fat_ent <> CLUST_EOC)
+    ser.strln(@"done")
 
     { starting with the entry immediately after the EOC, look for an unused/available
         entry }
@@ -194,15 +206,18 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
             avail := (sect_offs / 4)
             quit
         sect_offs += 4                          ' none yet; next FAT entry
+    ser.printf1(string("avail: %x\n\r"), avail)
 
 PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
 ' Find last cluster # of file
 '   LIMITATIONS:
 '       * stays on first sector of FAT
+    ser.strln(string("FindLastClust():"))
     cl_nr := 0
     fat_ent := ffirstclust{}
     resp := sd.rdblock(@_sect_buff, fat1start{})    ' read the FAT
     if (resp <> 512)
+        ser.strln(string("read error"))
         return ERDIO                            ' catch read error from SD
     repeat
         sect_offs := (fat_ent * 4)              ' conv fat entry # to sector offset
@@ -210,6 +225,7 @@ PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
         { read next entry in chain }
         bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
     while (fat_ent <> CLUST_EOC)
+    ser.printf1(string("last clust is %x\n\r"), (sect_offs/4))
     return (sect_offs / 4)
 
 PUB FOpen(fn_str, mode): status
@@ -239,7 +255,9 @@ PUB FOpenEnt(file_nr, mode): status
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
+    ser.strln(string("FOpenEnt():"))
     if (fnumber{})
+        ser.strln(string("already open"))
         return EOPEN
     sd.rdblock(@_sect_buff, rootdirsect{} + (file_nr >> 4))
     readdirent(file_nr & $0f)
@@ -371,14 +389,14 @@ PUB ReadFAT(fat_sect): resp
 
 pub wrdirent(dno)
 
-    ser.strln(@"wrdirent()")
+    ser.strln(string("wrdirent()"))
     'read root dir sect
     sd.rdblock(@_sect_buff, rootdirsect{} + (dno >> 4))
 
     'fill in metadata
 '    ser.hexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
     bytemove(@_sect_buff+DirentStart(dno), @_dirent, DIRENT_LEN)
-    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+'    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 
     'write root dir sect back to disk
     sd.wrblock(@_sect_buff, rootdirsect{} + (dno >> 4))

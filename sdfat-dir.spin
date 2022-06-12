@@ -66,7 +66,7 @@ PUB DIR{} | dirent, total, endofdir, t_files
             ser.printf1(string("[%s]\n\r"), sd.fname{})
         else
             { regular files }
-            ser.printf3(string("%s.%s   %d "), sd.fname{}, sd.fnameext{}, sd.fsize{})
+            ser.printf4(string("%s.%s   %d %x "), sd.fname{}, sd.fnameext{}, sd.fsize{}, sd.ffirstclust{})
             printdate(sd.fdatecreated{})
             printtime(sd.ftimecreated{})
             printattrs(sd.fattrs{})
