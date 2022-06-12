@@ -395,6 +395,12 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     _sect_offs := (pos // sectsz{})
     return pos
 
+PUB FTell{}: pos
+' Get current seek position in currently opened file
+    ifnot (fnumber{})
+        return ENOTOPEN                         ' no file open
+    return _fseek_pos
+
 PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
 ' Write buffer to card
 '   ptr_buff: address of buffer to write to SD
@@ -439,10 +445,6 @@ pub rdblock(ptr, sect)
 pub wrblock(ptr, sect): resp
 
     return sd.wrblock(ptr, sect)
-
-pub getpos
-
-    return _fseek_pos
 
 pub getsbp
 
