@@ -125,6 +125,25 @@ PUB AllocClust(cl_nr): status | tmp
 
     return cl_nr
 
+PUB DirentUpdate(dirent_nr): status
+' Update a directory entry on disk
+'   dirent_nr: directory entry number
+    ser.strln(string("DirentUpdate()"))
+    { read root dir sect }
+    status := sd.rdblock(@_sect_buff, rootdirsect{} + (dno >> 4))
+    if (status < 0)
+        ser.strln(string("read error"))
+        return ERDIO
+
+    { copy currently cached dirent to sector buffer }
+    bytemove(@_sect_buff+direntstart(dirent_nr), @_dirent, DIRENT_LEN)
+
+    { write root dir sect back to disk }
+    status := sd.wrblock(@_sect_buff, rootdirsect{} + (dirent_nr >> 4))
+    if (status < 0)
+        ser.strln(string("write error"))
+        return EWRIO
+
 PUB FClose2{}: status
 ' Close the currently opened file
 '   Returns:
@@ -408,20 +427,6 @@ PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
     resp := sd.rdblock(@_sect_buff, (fat1start{} + fat_sect))
-
-pub wrdirent(dno)
-
-    ser.strln(string("wrdirent()"))
-    'read root dir sect
-    sd.rdblock(@_sect_buff, rootdirsect{} + (dno >> 4))
-
-    'fill in metadata
-'    ser.hexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
-    bytemove(@_sect_buff+DirentStart(dno), @_dirent, DIRENT_LEN)
-'    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-
-    'write root dir sect back to disk
-    sd.wrblock(@_sect_buff, rootdirsect{} + (dno >> 4))
 
 #include "filesystem.block.fat.spin"
 
