@@ -208,6 +208,28 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
         sect_offs += 4                          ' none yet; next FAT entry
     ser.printf1(string("avail: %x\n\r"), avail)
 
+PUB FindFreeDirent{}: dirent_nr | endofdir
+' Find free directory entry
+'   Returns: entry number
+    ser.strln(@"FindFreeDirent():")
+    repeat
+        dirent_nr := 0
+        repeat 16                               ' up to 16 entries per sector
+            fclose2{}
+            ser.printf1(@"checking dirent #%d...\n\r", dirent_nr)
+            fopenent(dirent_nr, O_RDONLY)    ' get current dirent's info
+            { important: skip entries that are subdirs, deleted files, or the volume name,
+                but count them as dirents }
+            if (fisdir{} or fdeleted{} or fisvolnm{})
+                dirent_nr++
+                next
+            if (direntneverused{})              ' last directory entry
+                endofdir := true
+                quit
+            dirent_nr++
+    until endofdir
+    fclose2{}
+
 PUB FindLastClust{}: cl_nr | sect_offs, fat_ent, fat_ent_prev, resp
 ' Find last cluster # of file
 '   LIMITATIONS:
