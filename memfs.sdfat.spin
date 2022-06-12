@@ -20,6 +20,8 @@ CON
     EOPEN       = -6                            ' already open
     ENOTOPEN    = -7                            ' no file open
     ECL_INUSE   = -8                            ' cluster in use
+    EEXIST      = -9                            ' file already exists
+    ENOSPC      = -10                           ' no space left on device or no free clusters
 
     ENOTIMPLM   = -256                          ' not implemented
     EWRIO       = -512 {$ff_ff_e0_00}           ' I/O error (writing)
@@ -29,6 +31,7 @@ CON
     O_RDONLY    = (1 << 0)                      ' R
     O_WRITE     = (1 << 1)                      ' W (writes _overwrite_)
     O_RDWR      = O_RDONLY | O_WRITE            ' R/W
+    O_CREAT     = (1 << 2)                      ' create file
 
 VAR
 
@@ -43,9 +46,6 @@ OBJ
     str : "string"
     ser : "com.serial.terminal.ansi-new"
     time: "time"
-
-'PUB Null{}
-'' This is not a top-level object
 
 PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
@@ -101,10 +101,10 @@ PUB AllocClust(cl_nr): status | tmp
     bytefill(@_sect_buff, 0, 512)
     status := sd.rdblock(@_sect_buff, fat1start{})
     if (status <> 512)
-        ser.strln(string("read error"))
+        ser.printf1(string("read error %d\n\r"), status)
         return ERDIO
 
-    { test the requested cluster number - is it free? }
+    { check the requested cluster number - is it free? }
     tmp := 0
     bytemove(@tmp, @_sect_buff+(cl_nr*4), 4)
     if (tmp <> 0)
@@ -123,6 +123,7 @@ PUB AllocClust(cl_nr): status | tmp
         ser.strln(string("write error"))
         return EWRIO
 
+    ser.strln(string("AllocClust(): [ret]"))
     return cl_nr
 
 PUB DirentUpdate(dirent_nr): status
@@ -156,6 +157,35 @@ PUB FClose2{}: status
     _fmode := 0
     fclose{}
     return 0
+
+PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
+' Create file
+'   fn_str: pointer to string containing filename
+'   attrs: initial file attributes
+
+    { find a free directory entry }
+    dirent_nr := findfreedirent{}
+    fopenent(dirent_nr, O_RDWR)
+    ser.printf1(string("found dirent # %d\n\r"), dirent_nr)
+
+    { find a free cluster, starting at the beginning of the FAT }
+    ffc := findfreeclust(3)
+    ser.printf1(string("first free cluster: %x\n\r"), ffc)
+    if (ffc < 3)
+        return ENOSPC
+
+    { set up the file's initial metadata }
+    fsetfname(fn_str)
+    fsetext(fn_str+9)   'XXX expects string at fn_str to be in '8.3' format, _with_ the period
+    fsetattrs(attrs)
+    fsetsize(0)
+    fsetfirstclust(ffc)
+    direntupdate(dirent_nr)
+
+    { allocate a cluster }
+    allocclust(ffc)
+
+    return dirent_nr
 
 PUB FileSize{}: sz
 ' Get size of opened file
@@ -280,8 +310,14 @@ PUB FOpen(fn_str, mode): status
     if (fnumber{})                              ' file is already open
         return EOPEN
     status := find(fn_str)                      ' look for file by name
-    if (status == ENOTFOUND)                    ' file not found
-        return ENOTFOUND
+    if (_fmode & O_CREAT)
+        if (status > 0)                         ' file already exists
+            ser.strln(string("file already exists"))
+            return EEXIST   'XXX verify func of this block -  may not work?
+        status := fcreate(fn_str, FATTR_ARC)
+    else
+        if (status == ENOTFOUND)                ' file not found
+            return ENOTFOUND
     readdirent(status & $0F)                    ' mask is to keep within # root dir entries per rds
     _fseek_pos := 0
     _fseek_sect := ffirstsect{}                 ' initialize current sector with file's first
