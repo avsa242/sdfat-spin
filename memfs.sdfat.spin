@@ -130,7 +130,7 @@ PUB DirentUpdate(dirent_nr): status
 '   dirent_nr: directory entry number
     ser.strln(string("DirentUpdate()"))
     { read root dir sect }
-    status := sd.rdblock(@_sect_buff, rootdirsect{} + (dno >> 4))
+    status := sd.rdblock(@_sect_buff, rootdirsect{} + (dirent_nr >> 4))
     if (status < 0)
         ser.strln(string("read error"))
         return ERDIO
