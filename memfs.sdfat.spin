@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 12, 2022
+    Updated Jun 13, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -163,7 +163,11 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
 '   fn_str: pointer to string containing filename
 '   attrs: initial file attributes
 
-    { find a free directory entry }
+    { first, verify a file with the same name doesn't already exist }
+    if (find(fn_str) <> ENOTFOUND)
+        return EEXIST
+
+    { find a free directory entry, and open it read/write }
     dirent_nr := findfreedirent{}
     fopenent(dirent_nr, O_RDWR)
     ser.printf1(string("found dirent # %d\n\r"), dirent_nr)
