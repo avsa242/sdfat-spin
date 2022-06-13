@@ -22,6 +22,7 @@ CON
     ECL_INUSE   = -8                            ' cluster in use
     EEXIST      = -9                            ' file already exists
     ENOSPC      = -10                           ' no space left on device or no free clusters
+    EINVAL      = -11                           ' invalid argument
 
     ENOTIMPLM   = -256                          ' not implemented
     EWRIO       = -512 {$ff_ff_e0_00}           ' I/O error (writing)
@@ -125,6 +126,55 @@ PUB AllocClust(cl_nr): status | tmp
 
     ser.strln(string("AllocClust(): [ret]"))
     return cl_nr
+
+PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, sect
+' Allocate a block of contiguous clusters
+'   cl_st_nr: starting cluster number
+'   count: number of clusters to allocate
+'   Returns:
+'       number of clusters allocated on success
+'       negative number on error
+    ser.strln(@"AllocClustBlock():")
+
+    { validate the starting cluster number and count }
+    if ((cl_st_nr < 3) or (count < 1))
+        return EINVAL
+
+    { read FAT sector }
+    bytefill(@_sect_buff, 0, 512)
+    sect := (fat1start{} + clustnum2fatsect(cl_st_nr))
+    status := sd.rdblock(@_sect_buff, sect)
+    if (status <> 512)
+        ser.printf1(string("read error %d\n\r"), status)
+        return ERDIO
+
+    last_cl := (cl_st_nr + (count-1))
+    { before trying to allocate clusters, check that the requested number of them are free }
+    repeat cl_nr from cl_st_nr to last_cl
+        ser.printf1(@"cluster %d? ", cl_nr)
+        bytemove(@tmp, @_sect_buff + clustnum2offs(cl_nr), 4)
+        if (tmp <> 0)                           ' no, found a cluster that is in use
+            ser.strln(@"in use - fail")
+            return ENOSPC
+        ser.strln(@"free")
+
+    { link clusters, from first to one before the last one }
+    repeat cl_nr from cl_st_nr to (last_cl-1)
+        tmp := (cl_nr + 1)
+        bytemove(@_sect_buff + clustnum2offs(cl_nr), @tmp, 4)
+
+    { mark last cluster as the EOC }
+    tmp := CLUST_EOC
+    bytemove(@_sect_buff + clustnum2offs(last_cl), @tmp, 4)
+
+    { write updated FAT sector }
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+    status := sd.wrblock(@_sect_buff, sect)
+    if (status <> 512)
+        ser.printf1(string("write error %d\n\r", status)
+        return EWRIO
+
+    return count
 
 PUB DirentUpdate(dirent_nr): status
 ' Update a directory entry on disk
