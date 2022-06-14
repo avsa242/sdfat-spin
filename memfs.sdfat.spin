@@ -252,6 +252,7 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
 '   Returns:
 '       directory entry of file (0..n)
 '       or ENOTFOUND (-2) if not found
+    ser.strln(@"Find():")
     dirent := 0
     rds := 0
     endofdir := false
@@ -272,10 +273,12 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             ext_uc := str.upper(@ext_tmp)
             if strcomp(fname{}, name_uc) and {
 }           strcomp(fnameext{}, ext_uc)     ' match found for filename; get
+                fclose{}
                 return dirent+(rds * 16)        '   number relative to entr. 0
             dirent++
         rds++                                   ' go to next root dir sector
     until endofdir
+    ser.strln(@"error: not found")
     return ENOTFOUND
 
 PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
@@ -293,7 +296,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
     repeat
         fat_ent_prev := fat_ent
         { read next entry in chain }
-        bytemove(@fat_ent, (@_sect_buff + clustnum2offs(fat_ent), 4)
+        bytemove(@fat_ent, (@_sect_buff + clustnum2offs(fat_ent)), 4)
         ser.printf1(@"sect_offs: %d\n\r", clustnum2offs(fat_ent))
         time.msleep(500)
     while (fat_ent <> CLUST_EOC)
@@ -301,6 +304,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
 
     { starting with the entry immediately after the EOC, look for an unused/available
         entry }
+    sect_offs := 0
     repeat while (sect_offs < 508)
         sect_offs := clustnum2offs(fat_ent_prev + 1)
         bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
@@ -348,7 +352,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, fat_ent_prev, resp, sect_offs
         { read next entry in chain }
         bytemove(@fat_ent, (@_sect_buff + clustnum2offs(fat_ent)), 4)
     while (fat_ent <> CLUST_EOC)
-    ser.printf1(string("last clust is %x\n\r"), sectoffs2clust(sect_offs))
+    ser.printf1(string("last clust is %x\n\r"), fat_ent)
     return sectoffs2clust(sect_offs)
 
 PUB FOpen(fn_str, mode): status
@@ -359,22 +363,19 @@ PUB FOpen(fn_str, mode): status
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
+    ser.strln(@"FOpen():")
     if (fnumber{})                              ' file is already open
+        ser.strln(@"error: already open")
         return EOPEN
     status := find(fn_str)                      ' look for file by name
-    if (_fmode & O_CREAT)
-        if (status > 0)                         ' file already exists
-            ser.strln(string("file already exists"))
-            return EEXIST   'XXX verify func of this block -  may not work?
-        status := fcreate(fn_str, FATTR_ARC)
-    else
-        if (status == ENOTFOUND)                ' file not found
-            return ENOTFOUND
-    readdirent(status & $0F)                    ' mask is to keep within # root dir entries per rds
-    _fseek_pos := 0
-    _fseek_sect := ffirstsect{}                 ' initialize current sector with file's first
-    _fmode := mode
-    return fnumber{}
+'    if (_fmode & O_CREAT)
+'        status := fcreate(fn_str, FATTR_ARC)
+'    else
+    if (status == ENOTFOUND)                ' file not found
+        ser.strln(@"error: not found")
+        return ENOTFOUND
+    ser.printf1(@"found file, dirent # %d\n\r", status)
+    return fopenent(status, mode)
 
 PUB FOpenEnt(file_nr, mode): status
 ' Open file by dirent # for subsequent operations
@@ -403,6 +404,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '   Returns:
 '       number of bytes actually read,
 '       or error
+    ser.strln(@"FRead():")
     ifnot (fnumber{})                          ' no file open
         return ENOTOPEN
 
@@ -412,8 +414,11 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
     if (_fseek_pos < fsize{})
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
+        ser.printf1(@"nr_bytes: %d\n\r", nr_bytes)
         nr_bytes := nr_bytes <# sectsz{} <# fsize{} <# (fsize{}-_fseek_pos) ' XXX seems like this should be -1
-
+        ser.printf1(@"sectsz: %d\n\r", sectsz{})
+        ser.printf1(@"fsize: %d\n\r", fsize{})
+        ser.printf1(@"(fsize-_fseek_pos): %d\n\r", fsize{}-_fseek_pos)
         { read a block from the SD card into the internal sector buffer,
             and copy as many bytes as possible from it into the user's buffer }
         resp := sd.rdblock(@_sect_buff, _fseek_sect)
