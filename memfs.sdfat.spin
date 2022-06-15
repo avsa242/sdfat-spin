@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 14, 2022
+    Updated Jun 15, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -440,6 +440,28 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         return nr_read
     else
         return EEOF                             ' reached end of file
+
+PUB FRename(fn_old, fn_new): status | dirent
+' Rename file
+'   fn_old: existing filename
+'   fn_new: new filename
+'   Returns:
+'       dirent # of file on success
+'       negative numbers on error
+    { verify existence of file }
+    dirent := find(fn_old)
+    if (dirent < 0)
+        ser.strln(@"file not found")
+        return ENOTFOUND
+
+    { verify new filename is valid }
+    if (strcomp(fn_old, fn_new))
+        return EEXIST
+
+    fopenent(dirent, O_RDWR)
+    fsetfname(fn_new)
+    direntupdate(dirent)
+    fclose{}
 
 PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
