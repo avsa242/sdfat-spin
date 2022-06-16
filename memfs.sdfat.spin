@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 15, 2022
+    Updated Jun 16, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -240,6 +240,47 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
     allocclust(ffc)
 
     return dirent_nr
+
+PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
+' Delete a file
+'   fn_str: pointer to string containing filename
+'   Returns:
+'       existing directory entry number on success
+'       negative numbers on failure
+    ser.strln(@"FDelete()")
+    { verify file exists }
+    dirent := find(fn_str)
+    if (dirent < 0)
+        return ENOTFOUND
+
+    { rename file with first byte set to FATTR_DEL ($E5) }
+    fopenent(dirent, O_RDWR)
+    _dirent[0] := FATTR_DEL
+    direntupdate(dirent)
+
+    { clear the file's entire cluster chain to 0 }
+    clust_nr := ffirstclust{}
+    fat_sect := clustnum2fatsect(clust_nr)
+    status := readfat(fat_sect)
+    if (status <> 512)
+        ser.strln(string("read error"))
+        return ERDIO
+    tmp := 0
+    repeat ftotalclust{}
+        { read next entry in chain before clearing the current one - need to know where
+            to go to next beforehand }
+        bytemove(@nx_clust, (@_sect_buff + clustnum2offs(clust_nr)), 4)
+        bytemove(@_sect_buff + clustnum2offs(clust_nr), @tmp, 4)
+        clust_nr := nx_clust
+
+    { write modified FAT back to disk }
+'    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+    status := sd.wrblock(@_sect_buff, fat_sect)
+    if (status <> 512)
+        ser.printf1(string("write error %d\n\r"), status)
+        return EWRIO
+
+    return dirent
 
 PUB FileSize{}: sz
 ' Get size of opened file
