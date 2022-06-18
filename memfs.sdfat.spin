@@ -373,7 +373,7 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
     until endofdir
     fclose2{}
 
-PUB FindLastClust{}: cl_nr | fat_ent, resp
+PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
 '   LIMITATIONS:
 '       * stays on first sector of FAT
@@ -382,7 +382,8 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp
     fat_ent := ffirstclust{}
 
     { read the FAT }
-    resp := sd.rdblock(@_sect_buff, fat1start{})
+    fat_sect := (fat1start{} + clustnum2fatsect(fat_ent))
+    resp := sd.rdblock(@_sect_buff, fat_sect)
     if (resp <> 512)
         ser.strln(string("read error"))
         return ERDIO
