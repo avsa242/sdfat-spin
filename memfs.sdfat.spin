@@ -33,6 +33,7 @@ CON
     O_WRITE     = (1 << 1)                      ' W (writes _overwrite_)
     O_RDWR      = O_RDONLY | O_WRITE            ' R/W
     O_CREAT     = (1 << 2)                      ' create file
+    O_APPEND    = (1 << 3)                      ' W (allow file to grow)
 
 VAR
 
@@ -180,8 +181,9 @@ PUB DirentUpdate(dirent_nr): status
 ' Update a directory entry on disk
 '   dirent_nr: directory entry number
     ser.strln(string("DirentUpdate()"))
-
+    ser.printf1(@"called with: %d\n\r", dirent_nr)
     { read root dir sect }
+    ser.strln(@"rdblock")
     status := sd.rdblock(@_sect_buff, rootdirsect{} + (dirent_nr >> 4))
     if (status < 0)
         ser.strln(string("read error"))
@@ -191,10 +193,12 @@ PUB DirentUpdate(dirent_nr): status
     bytemove(@_sect_buff+direntstart(dirent_nr), @_dirent, DIRENT_LEN)
 
     { write root dir sect back to disk }
+    ser.strln(@"wrblock")
     status := sd.wrblock(@_sect_buff, rootdirsect{} + (dirent_nr >> 4))
     if (status < 0)
         ser.strln(string("write error"))
         return EWRIO
+    ser.strln(@"[ret]")
 
 PUB FClose2{}: status
 ' Close the currently opened file
@@ -406,7 +410,7 @@ PUB FOpen(fn_str, mode): status
 '       or error
     ser.strln(@"FOpen():")
     if (fnumber{})                              ' file is already open
-        ser.strln(@"error: already open")
+        ser.strln(@"error: already open")   'xxx bit of duplication with FOpenEnt()
         return EOPEN
     status := find(fn_str)                      ' look for file by name
 '    if (_fmode & O_CREAT)
@@ -432,6 +436,7 @@ PUB FOpenEnt(file_nr, mode): status
         return EOPEN
     sd.rdblock(@_sect_buff, (rootdirsect{} + dirent2sect(file_nr)))
     readdirent(file_nr & $0f)
+    ser.hexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
     _fseek_pos := 0
     _fseek_sect := ffirstsect{}             ' initialize current sector with file's first
     _fmode := mode
@@ -511,10 +516,29 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '   Returns:
 '       position seeked to,
 '       or error
+    ser.strln(@"FSeek():")
     ifnot (fnumber{})
+        ser.strln(@"error: no file open")
         return ENOTOPEN                         ' no file open
-    if ((pos < 0) or (pos => fsize{}))          ' catch bad seek positions;
-        return EBADSEEK                         '   return error
+    if (pos < 0)                                ' catch bad seek positions
+        ser.strln(@"error: illegal seek")
+        return EBADSEEK
+    { only allow a seek position greater than the file's current size if it was opened
+        with _both_ the O_WRITE and O_APPEND bits }
+    if (pos => fsize{})
+        ser.strln(@"attempt to access beyond end of file:")
+        if ((_fmode & O_WRITE) and (_fmode & O_APPEND))
+            ser.strln(@"    mode IS write w/append(ok)")
+            if (pos < (ftotalclust{} * clustsz{}))
+                ser.strln(@"    seek pos IS within allocated clusters (ok)")
+                fsetsize(pos+1)                 ' grow file (*limited to clusters allocated)
+            else
+                ser.strln(@"    outside of allocated clusters (error)")
+                return EBADSEEK
+        else
+            ser.strln(@"    mode is NOT write and/or append (error)")
+            return EBADSEEK                     ' error: beyond end of file
+
     longfill(@seek_clust, 0, 6)                 ' clear local vars
 
     { initialize cluster number with the file's first cluster number }
@@ -545,6 +569,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     _fseek_sect := (clust2sect(clust_nr) + rel_sect_nr)
     _fseek_pos := pos
     _sect_offs := (pos // sectsz{})
+    ser.strln(@"FSeek() [ret]")
     return pos
 
 PUB FTell{}: pos
@@ -553,11 +578,12 @@ PUB FTell{}: pos
         return ENOTOPEN                         ' no file open
     return _fseek_pos
 
-PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
+PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 ' Write buffer to card
 '   ptr_buff: address of buffer to write to SD
 '   len: number of bytes to write from buffer
 '       NOTE: a full sector is always written
+    ser.strln(@"FWrite():")
     ifnot (fnumber{})
         return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
@@ -565,13 +591,17 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
+        ser.printf1(@"nr_left = %d\n\r", nr_left)
         { how much of the total to write to this sector }
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
+        ser.printf1(@"sect_wrsz = %d\n\r", sect_wrsz)
         bytefill(@_sect_buff, 0, sectsz{})
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
-            sd.rdblock(@_sect_buff, _fseek_sect)
+            resp := sd.rdblock(@_sect_buff, _fseek_sect)
+            if (resp < 1)
+                return ERDIO
 
         { copy the next chunk of data to the sector buffer }
         bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)
@@ -579,8 +609,11 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left
         status := sd.wrblock(@_sect_buff, _fseek_sect)
         if (status == sd#SECT_SZ)
             { update position to advance by how much was just written }
+
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
+
+    ser.strln(@"FWrite() [ret]")
 
 PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
