@@ -373,24 +373,27 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
     until endofdir
     fclose2{}
 
-PUB FindLastClust{}: cl_nr | fat_ent, fat_ent_prev, resp, sect_offs
+PUB FindLastClust{}: cl_nr | fat_ent, resp
 ' Find last cluster # of file
 '   LIMITATIONS:
 '       * stays on first sector of FAT
     ser.strln(string("FindLastClust():"))
     cl_nr := 0
     fat_ent := ffirstclust{}
-    resp := sd.rdblock(@_sect_buff, fat1start{})    ' read the FAT
+
+    { read the FAT }
+    resp := sd.rdblock(@_sect_buff, fat1start{})
     if (resp <> 512)
         ser.strln(string("read error"))
-        return ERDIO                            ' catch read error from SD
+        return ERDIO
+
+    { follow chain }
     repeat
-        fat_ent_prev := fat_ent
-        { read next entry in chain }
+        cl_nr := fat_ent
         bytemove(@fat_ent, (@_sect_buff + clustnum2offs(fat_ent)), 4)
     while (fat_ent <> CLUST_EOC)
-    ser.printf1(string("last clust is %x\n\r"), fat_ent)
-    return sectoffs2clust(sect_offs)
+    ser.printf1(string("last clust is %x\n\r"), cl_nr)
+    return cl_nr
 
 PUB FOpen(fn_str, mode): status
 ' Open file for subsequent operations
