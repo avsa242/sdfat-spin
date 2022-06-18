@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRead() example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 14, 2022
+    Updated Jun 18, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -81,6 +81,10 @@ PUB Main | err, fn, pos, act_read, cmd
                 sd.fseek(pos)
             "e":
                 pos := sd.filesize{}-512
+                sd.fseek(pos)
+            "p":
+                ser.printf1(@"Enter seek position: (0..%d)> ", sd.fend{})
+                pos := ser.decin
                 sd.fseek(pos)
 
 #include "sderr.spinh"
