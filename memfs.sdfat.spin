@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 16, 2022
+    Updated Jun 18, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -180,6 +180,7 @@ PUB DirentUpdate(dirent_nr): status
 ' Update a directory entry on disk
 '   dirent_nr: directory entry number
     ser.strln(string("DirentUpdate()"))
+
     { read root dir sect }
     status := sd.rdblock(@_sect_buff, rootdirsect{} + (dirent_nr >> 4))
     if (status < 0)
@@ -322,38 +323,33 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     ser.strln(@"error: not found")
     return ENOTFOUND
 
-PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_ent_prev, resp
+PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
 ' Find a free cluster, starting from cluster #
 '   LIMITATIONS:
-'   * only works on 1st sector of FAT
 '   * doesn't return to the beginning of the FAT to look before the file's first cluster
     ser.strln(string("FindFreeClust():"))
     avail := 0
+
+    { read FAT }
     fat_ent := st_from
-    resp := sd.rdblock(@_sect_buff, fat1start{})' read the FAT
+    fat_sect := clustnum2fatsect(st_from)
+    ser.printf1(@"fat_ent = %d\n\r", fat_ent)
+    resp := sd.rdblock(@_sect_buff, fat1start{} + fat_sect)
     if (resp <> 512)
         ser.strln(string("read error"))
         return ERDIO
-    repeat
-        fat_ent_prev := fat_ent
-        { read next entry in chain }
-        bytemove(@fat_ent, (@_sect_buff + clustnum2offs(fat_ent)), 4)
-        ser.printf1(@"sect_offs: %d\n\r", clustnum2offs(fat_ent))
-        time.msleep(500)
-    while (fat_ent <> CLUST_EOC)
-    ser.strln(@"done")
 
-    { starting with the entry immediately after the EOC, look for an unused/available
-        entry }
-    sect_offs := 0
+    { starting with the cluster # called for, look for an unused one }
+    sect_offs := clustnum2offs(st_from)
     repeat while (sect_offs < 508)
-        sect_offs := clustnum2offs(fat_ent_prev + 1)
         bytemove(@fat_ent, (@_sect_buff + sect_offs), 4)
         if (fat_ent == 0)                       ' found a free one
-            avail := sectoffs2clust(sect_offs)
-            quit
+            ser.printf1(string("found free clust: %x\n\r"), sectoffs2absclust(sect_offs, fat_sect))
+            return sectoffs2absclust(sect_offs, fat_sect)
         sect_offs += 4                          ' none yet; next FAT entry
-    ser.printf1(string("avail: %x\n\r"), avail)
+
+    { if this point is reached, no free clusters were found }
+    return ENOSPC
 
 PUB FindFreeDirent{}: dirent_nr | endofdir
 ' Find free directory entry
