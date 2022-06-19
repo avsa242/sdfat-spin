@@ -100,9 +100,7 @@ PUB AllocClust(cl_nr): status | tmp
         return EWRONGMODE
 
     { read FAT sector }
-    bytefill(@_sect_buff, 0, 512)
-    status := sd.rdblock(@_sect_buff, fat1start{})
-    if (status <> 512)
+    if (readfat(clustnum2fatsect(cl_nr)) <> 512)
         ser.printf1(string("read error %d\n\r"), status)
         return ERDIO
 
@@ -142,10 +140,8 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, sect
         return EINVAL
 
     { read FAT sector }
-    bytefill(@_sect_buff, 0, 512)
     sect := (fat1start{} + clustnum2fatsect(cl_st_nr))
-    status := sd.rdblock(@_sect_buff, sect)
-    if (status <> 512)
+    if (readfat(sect) <> 512)
         ser.printf1(string("read error %d\n\r"), status)
         return ERDIO
 
@@ -338,8 +334,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
     fat_ent := st_from
     fat_sect := clustnum2fatsect(st_from)
     ser.printf1(@"fat_ent = %d\n\r", fat_ent)
-    resp := sd.rdblock(@_sect_buff, fat1start{} + fat_sect)
-    if (resp <> 512)
+    if (readfat(fat_sect) <> 512)
         ser.strln(string("read error"))
         return ERDIO
 
@@ -523,7 +518,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     if (pos < 0)                                ' catch bad seek positions
         ser.strln(@"error: illegal seek")
         return EBADSEEK
-    { only allow a seek position greater than the file's current size if it was opened
+    { allow a seek position greater than the file's current size only if it was opened
         with _both_ the O_WRITE and O_APPEND bits }
     if (pos => fsize{})
         ser.strln(@"attempt to access beyond end of file:")
@@ -618,6 +613,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
+    bytefill(@_sect_buff, 0, 512)
     resp := sd.rdblock(@_sect_buff, (fat1start{} + fat_sect))
 
 #include "filesystem.block.fat.spin"
