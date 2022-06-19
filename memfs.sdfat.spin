@@ -369,6 +369,10 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
 '   LIMITATIONS:
 '       * stays on first sector of FAT
     ser.strln(string("FindLastClust():"))
+    ifnot (_file_nr)
+        ser.strln(string("error: no file open"))
+        return ENOTOPEN
+
     cl_nr := 0
     fat_ent := ffirstclust{}
 
