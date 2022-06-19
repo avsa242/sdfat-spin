@@ -92,7 +92,7 @@ PUB Mount{}: status
     if (status < 0)
         return status
 
-PUB AllocClust(cl_nr): status | tmp
+PUB AllocClust(cl_nr): status | tmp, fat_sect
 ' Allocate a new cluster
     ser.strln(string("AllocClust():"))
     ifnot (_fmode & O_WRITE)                    ' file must be opened for writing
@@ -100,7 +100,8 @@ PUB AllocClust(cl_nr): status | tmp
         return EWRONGMODE
 
     { read FAT sector }
-    if (readfat(clustnum2fatsect(cl_nr)) <> 512)
+    fat_sect := clustnum2fatsect(cl_nr)
+    if (readfat(fat_sect) <> 512)
         ser.printf1(string("read error %d\n\r"), status)
         return ERDIO
 
@@ -115,15 +116,14 @@ PUB AllocClust(cl_nr): status | tmp
     { write the updated FAT sector to SD }
     ser.strln(string("updated FAT: "))
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-    status := sd.wrblock(@_sect_buff, fat1start{})
-    if (status <> 512)
+    if (writefat(fat_sect) <> 512)
         ser.strln(string("write error"))
         return EWRIO
 
     ser.strln(string("AllocClust(): [ret]"))
     return cl_nr
 
-PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, sect
+PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 ' Allocate a block of contiguous clusters
 '   cl_st_nr: starting cluster number
 '   count: number of clusters to allocate
@@ -137,8 +137,8 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, sect
         return EINVAL
 
     { read FAT sector }
-    sect := (fat1start{} + clustnum2fatsect(cl_st_nr))
-    if (readfat(sect) <> 512)
+    fat_sect := clustnum2fatsect(cl_st_nr)
+    if (readfat(fat_sect) <> 512)
         ser.printf1(string("read error %d\n\r"), status)
         return ERDIO
 
@@ -159,9 +159,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, sect
     clustwr(last_cl, CLUST_EOC)
 
     { write updated FAT sector }
-    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-    status := sd.wrblock(@_sect_buff, sect)
-    if (status <> 512)
+    if (writefat(fat_sect) <> 512)
         ser.printf1(string("write error %d\n\r"), status)
         return EWRIO
 
@@ -270,8 +268,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
         clust_nr := nx_clust
 
     { write modified FAT back to disk }
-    status := sd.wrblock(@_sect_buff, fat_sect)
-    if (status <> 512)
+    if (writefat(fat_sect) <> 512)
         ser.printf1(string("write error %d\n\r"), status)
         return EWRIO
 
@@ -610,7 +607,16 @@ PUB ReadFAT(fat_sect): resp
     ser.strln(@"ReadFAT():")
     bytefill(@_sect_buff, 0, 512)
     resp := sd.rdblock(@_sect_buff, (fat1start{} + fat_sect))
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     ser.strln(@"ReadFAT(): [ret]")
+
+PUB WriteFAT(fat_sect): resp
+' Write the FAT from the sector buffer
+'   fat_sect: sector of the FAT to write
+    ser.strln(@"WriteFAT():")
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+    resp := sd.wrblock(@_sect_buff, (fat1start{} + fat_sect))
+    ser.strln(@"WriteFAT(): [ret]")
 
 #include "filesystem.block.fat.spin"
 
