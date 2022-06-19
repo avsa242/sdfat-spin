@@ -189,6 +189,33 @@ PUB DirentUpdate(dirent_nr): status
         return EWRIO
     ser.strln(@"[ret]")
 
+PUB FAllocate{}: status | flc, cl_free, fat_sect
+' Allocate a new cluster for the currently opened file
+    ser.strln(@"FAllocate():")
+    ifnot (_file_nr)
+        ser.strln(@"error: no file open")
+        return ENOTOPEN
+    { find last cluster # of file }
+    flc := _last_clust
+    ser.printf1(@"last cluster: %x\n\r", flc)
+
+    { find a free cluster }
+    cl_free := findfreeclust(flc)
+    ser.printf1(@"free cluster found: %x\n\r", cl_free)
+
+    { rewrite the file's last cluster entry to point to the newly found free cluster }
+    fat_sect := clustnum2fatsect(flc)
+    if (readfat(fat_sect) <> 512)
+        ser.printf1(string("read error %d\n\r"), status)
+        return ERDIO
+    clustwr(flc, cl_free)
+    if (writefat(fat_sect) <> 512)
+        ser.printf1(string("write error %d\n\r"), status)
+        return EWRIO
+
+    { allocate/write EOC in the newly found free cluster }
+    return allocclust(cl_free)
+
 PUB FClose2{}: status
 ' Close the currently opened file
 '   Returns:
@@ -369,7 +396,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
 '   LIMITATIONS:
 '       * stays on first sector of FAT
     ser.strln(string("FindLastClust():"))
-    ifnot (_file_nr)
+    ifnot (fnumber{})
         ser.strln(string("error: no file open"))
         return ENOTOPEN
 
@@ -389,6 +416,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
     while (fat_ent <> CLUST_EOC)
     ser.printf1(string("last clust is %x\n\r"), cl_nr)
     _last_clust := cl_nr
+    ser.strln(@"FindLastClust(): [ret]")
     return cl_nr
 
 PUB FOpen(fn_str, mode): status
@@ -438,6 +466,7 @@ PUB FOpenEnt(file_nr, mode): status
     _fmode := mode
     findlastclust{}
 
+    ser.strln(@"FOpenEnt(): [ret]")
     return fnumber{}
 
 PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
@@ -619,14 +648,14 @@ PUB ReadFAT(fat_sect): resp
     ser.strln(@"ReadFAT():")
     bytefill(@_sect_buff, 0, 512)
     resp := sd.rdblock(@_sect_buff, (fat1start{} + fat_sect))
-    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+'    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     ser.strln(@"ReadFAT(): [ret]")
 
 PUB WriteFAT(fat_sect): resp
 ' Write the FAT from the sector buffer
 '   fat_sect: sector of the FAT to write
     ser.strln(@"WriteFAT():")
-    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+'    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     resp := sd.wrblock(@_sect_buff, (fat1start{} + fat_sect))
     ser.strln(@"WriteFAT(): [ret]")
 
