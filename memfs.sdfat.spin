@@ -289,25 +289,26 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     dirent := 0
     rds := 0
     endofdir := false
+    str.left(@name_tmp, ptr_str, 8)             ' filename is leftmost 8 chars
+    str.right(@ext_tmp, ptr_str, 3)             ' ext. is rightmost 3 chars
+    name_uc := str.upper(@name_tmp)             ' convert to uppercase
+    ext_uc := str.upper(@ext_tmp)
     repeat                                      ' check each rootdir sector
         sd.rdblock(@_sect_buff, rootdirsect{}+rds)
         dirent := 0
 
-        repeat 16                               ' check each file in the sector
-            readdirent(dirent)                ' get current file's info
-            if (direntneverused{})          ' last directory entry
+        repeat DIRENTS                          ' check each file in the sector
+            readdirent(dirent)                  ' get current file's info
+            if (direntneverused{})              ' last directory entry
                 endofdir := true
                 quit
-            if (fdeleted{})                 ' ignore deleted files
+            if (fdeleted{})                     ' ignore deleted files
+                dirent++
                 next
-            str.left(@name_tmp, ptr_str, 8)     ' filename is leftmost 8 chars
-            str.right(@ext_tmp, ptr_str, 3)     ' ext. is rightmost 3 chars
-            name_uc := str.upper(@name_tmp)     ' convert to uppercase
-            ext_uc := str.upper(@ext_tmp)
             if strcomp(fname{}, name_uc) and {
-}           strcomp(fnameext{}, ext_uc)     ' match found for filename; get
+}           strcomp(fnameext{}, ext_uc)         ' match found for filename; get
                 fclose{}
-                return dirent+(rds * 16)        '   number relative to entr. 0
+                return (dirent+(rds * DIRENTS)) '   number relative to entr. 0
             dirent++
         rds++                                   ' go to next root dir sector
     until endofdir
@@ -372,9 +373,8 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
     fat_ent := ffirstclust{}
 
     { read the FAT }
-    fat_sect := (fat1start{} + clustnum2fatsect(fat_ent))
-    resp := sd.rdblock(@_sect_buff, fat_sect)
-    if (resp <> 512)
+    fat_sect := clustnum2fatsect(fat_ent)
+    if (readfat(fat_sect) <> 512)
         ser.strln(string("read error"))
         return ERDIO
 
@@ -384,6 +384,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
         fat_ent := clustrd(fat_ent)
     while (fat_ent <> CLUST_EOC)
     ser.printf1(string("last clust is %x\n\r"), cl_nr)
+    _last_clust := cl_nr
     return cl_nr
 
 PUB FOpen(fn_str, mode): status
