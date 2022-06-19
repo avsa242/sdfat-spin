@@ -422,11 +422,18 @@ PUB FOpenEnt(file_nr, mode): status
         ser.strln(string("already open"))
         return EOPEN
     sd.rdblock(@_sect_buff, (rootdirsect{} + dirent2sect(file_nr)))
-    readdirent(file_nr & $0f)
-    ser.hexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
+    readdirent(file_nr & $0f)               ' cache dirent metadata
+
+    { set up the initial state:
+        * set the seek pointer to the file's beginning
+        * cache the file's open mode
+        * cache the file's last cluster number; it'll be used later if more need to be
+            allocated }
     _fseek_pos := 0
-    _fseek_sect := ffirstsect{}             ' initialize current sector with file's first
+    _fseek_sect := ffirstsect{}
     _fmode := mode
+    findlastclust{}
+
     return fnumber{}
 
 PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
