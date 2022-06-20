@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 19, 2022
+    Updated Jun 20, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -221,12 +221,17 @@ PUB FClose2{}: status
 '   Returns:
 '       0 on success
 '       ENOTOPEN if a file isn't currently open
-    ifnot (fnumber{})
+    ser.strln(@"FClose2():")
+    if (fnumber{} < 0)
+        ser.strln(@"    error: no file open")
+        ser.strln(@"FClose2(): [ret]")
         return ENOTOPEN                         ' file isn't open
     _fseek_pos := 0
     _fseek_sect := 0
     _fmode := 0
+    ser.printf1(@"    close number %d OK\n\r", fnumber{})
     fclose{}
+    ser.strln(@"FClose2(): [ret]")
     return 0
 
 PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
@@ -339,7 +344,8 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             dirent++
         rds++                                   ' go to next root dir sector
     until endofdir
-    ser.strln(@"error: not found")
+    ser.strln(@"    error: not found")
+    ser.strln(@"Find(): [ret]")
     return ENOTFOUND
 
 PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
@@ -367,6 +373,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
         sect_offs += 4                          ' none yet; next FAT entry
 
     { if this point is reached, no free clusters were found }
+    ser.strln(@"FindFreeClust(): [ret]")
     return ENOSPC
 
 PUB FindFreeDirent{}: dirent_nr | endofdir
@@ -396,25 +403,28 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
 '   LIMITATIONS:
 '       * stays on first sector of FAT
     ser.strln(string("FindLastClust():"))
-    ifnot (fnumber{})
-        ser.strln(string("error: no file open"))
+    if (fnumber{} < 0)
+        ser.strln(string("    error: no file open"))
         return ENOTOPEN
+    ser.printf1(@"    file number is %d\n\r", fnumber{})
 
     cl_nr := 0
     fat_ent := ffirstclust{}
-
+    ser.printf1(@"    first clust: %x\n\r", fat_ent)
     { read the FAT }
     fat_sect := clustnum2fatsect(fat_ent)
     if (readfat(fat_sect) <> 512)
-        ser.strln(string("read error"))
+        ser.strln(string("    read error"))
         return ERDIO
 
     { follow chain }
     repeat
         cl_nr := fat_ent
         fat_ent := clustrd(fat_ent)
-    while (fat_ent <> CLUST_EOC)
-    ser.printf1(string("last clust is %x\n\r"), cl_nr)
+        ser.printf1(@"    cl_nr: %x\n\r", cl_nr)
+        ser.printf1(@"    fat_ent: %x\n\r", fat_ent)
+    while (fat_ent <> CLUST_EOC) and (fat_ent <> $0fff_fff8)
+    ser.printf1(string("    last clust is %x\n\r"), cl_nr)
     _last_clust := cl_nr
     ser.strln(@"FindLastClust(): [ret]")
     return cl_nr
@@ -428,18 +438,19 @@ PUB FOpen(fn_str, mode): status
 '       file number (dirent #) if successful,
 '       or error
     ser.strln(@"FOpen():")
-    if (fnumber{})                              ' file is already open
-        ser.strln(@"error: already open")   'xxx bit of duplication with FOpenEnt()
+    if (fnumber{} => 0)                              ' file is already open
+        ser.strln(@"    error: already open")   'xxx bit of duplication with FOpenEnt()
         return EOPEN
     status := find(fn_str)                      ' look for file by name
 '    if (_fmode & O_CREAT)
 '        status := fcreate(fn_str, FATTR_ARC)
 '    else
     if (status == ENOTFOUND)                ' file not found
-        ser.strln(@"error: not found")
+        ser.strln(@"    error: not found")
         return ENOTFOUND
-    ser.printf1(@"found file, dirent # %d\n\r", status)
-    return fopenent(status, mode)
+    ser.printf1(@"    found file, dirent # %d\n\r", status)
+    status := fopenent(status, mode)
+    ser.strln(@"FOpen(): [ret]")
 
 PUB FOpenEnt(file_nr, mode): status
 ' Open file by dirent # for subsequent operations
@@ -450,12 +461,19 @@ PUB FOpenEnt(file_nr, mode): status
 '       file number (dirent #) if successful,
 '       or error
     ser.strln(string("FOpenEnt():"))
-    if (fnumber{})
-        ser.strln(string("already open"))
+    if (fnumber{} => 0)
+        ser.strln(string("    already open"))
         return EOPEN
     sd.rdblock(@_sect_buff, (rootdirsect{} + dirent2sect(file_nr)))
     readdirent(file_nr & $0f)               ' cache dirent metadata
+    if (direntneverused{})
+        ser.strln(@"error: dirent unused")
+        fclose2{}
+        ser.strln(@"FOpenEnt(): [ret]")
+        return
 
+    ser.hexdump(@_dirent, 0, 4, 32, 16)
+    ser.printf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext)
     { set up the initial state:
         * set the seek pointer to the file's beginning
         * cache the file's open mode
@@ -478,7 +496,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '       number of bytes actually read,
 '       or error
     ser.strln(@"FRead():")
-    ifnot (fnumber{})                          ' no file open
+    if (fnumber{} < 0)                          ' no file open
         return ENOTOPEN
 
     nr_read := nr_left := 0
@@ -513,6 +531,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         return nr_read
     else
         return EEOF                             ' reached end of file
+    ser.strln(@"FRead(): [ret]")
 
 PUB FRename(fn_old, fn_new): status | dirent
 ' Rename file
@@ -544,7 +563,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '       position seeked to,
 '       or error
     ser.strln(@"FSeek():")
-    ifnot (fnumber{})
+    if (fnumber{} < 0)
         ser.strln(@"error: no file open")
         return ENOTOPEN                         ' no file open
     if (pos < 0)                                ' catch bad seek positions
@@ -601,7 +620,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 
 PUB FTell{}: pos
 ' Get current seek position in currently opened file
-    ifnot (fnumber{})
+    if (fnumber{} < 0)
         return ENOTOPEN                         ' no file open
     return _fseek_pos
 
@@ -611,7 +630,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 '   len: number of bytes to write from buffer
 '       NOTE: a full sector is always written
     ser.strln(@"FWrite():")
-    ifnot (fnumber{})
+    if (fnumber{} < 0)
         return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
         return EWRONGMODE                       ' must be open for writing
