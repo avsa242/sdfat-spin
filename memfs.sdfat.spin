@@ -98,28 +98,30 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
 ' Allocate a new cluster
     ser.strln(string("AllocClust():"))
     ifnot (_fmode & O_WRITE)                    ' file must be opened for writing
-        ser.strln(string("bad file mode"))
+        ser.strln(string("    bad file mode"))
+        ser.strln(string("AllocClust(): [ret]"))
         return EWRONGMODE
 
     { read FAT sector }
     fat_sect := clustnum2fatsect(cl_nr)
     if (readfat(fat_sect) <> 512)
-        ser.printf1(string("read error %d\n\r"), status)
+        ser.printf1(string("    read error %d\n\r"), status)
         return ERDIO
 
     { check the requested cluster number - is it free? }
     if (clustrd(cl_nr) <> 0)
-        ser.strln(@"cluster in use")
+        ser.strln(@"    cluster in use")
         return ECL_INUSE
 
     { write the EOC marker into the newly allocated entry }
     clustwr(cl_nr, CLUST_EOC)
 
     { write the updated FAT sector to SD }
-    ser.strln(string("updated FAT: "))
+    ser.strln(string("    updated FAT: "))
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     if (writefat(fat_sect) <> 512)
-        ser.strln(string("write error"))
+        ser.strln(string("    write error"))
+        ser.strln(string("AllocClust(): [ret]"))
         return EWRIO
 
     ser.strln(string("AllocClust(): [ret]"))
@@ -171,25 +173,27 @@ PUB DirentUpdate(dirent_nr): status
 ' Update a directory entry on disk
 '   dirent_nr: directory entry number
     ser.strln(string("DirentUpdate()"))
-    ser.printf1(@"called with: %d\n\r", dirent_nr)
+    ser.printf1(@"    called with: %d\n\r", dirent_nr)
 
     { read root dir sect }
-    ser.strln(@"rdblock")
+    ser.strln(@"    rdblock")
     status := sd.rdblock(@_sect_buff, dirent2abssect(dirent_nr))
     if (status < 0)
-        ser.strln(string("read error"))
+        ser.strln(string("    read error"))
+        ser.strln(@"DirentUpdate(): [ret]")
         return ERDIO
 
     { copy currently cached dirent to sector buffer }
     bytemove(@_sect_buff+direntstart(dirent_nr), @_dirent, DIRENT_LEN)
 
     { write root dir sect back to disk }
-    ser.strln(@"wrblock")
+    ser.strln(@"    wrblock")
     status := sd.wrblock(@_sect_buff, dirent2abssect(dirent_nr))
     if (status < 0)
-        ser.strln(string("write error"))
+        ser.strln(string("    write error"))
+        ser.strln(@"DirentUpdate(): [ret]")
         return EWRIO
-    ser.strln(@"[ret]")
+    ser.strln(@"DirentUpdate(): [ret]")
 
 PUB FAllocate{}: status | flc, cl_free, fat_sect
 ' Allocate a new cluster for the currently opened file
@@ -247,14 +251,16 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
 
     { find a free directory entry, and open it read/write }
     dirent_nr := findfreedirent{}
-    fopenent(dirent_nr, O_RDWR)
-    ser.printf1(string("found dirent # %d\n\r"), dirent_nr)
+    fopenent(dirent_nr, O_RDWR | O_CREAT)
+    ser.printf1(string("    found dirent # %d\n\r"), dirent_nr)
+    ser.printf1(@"    fmode = %x\n\r", _fmode)
 
     { find a free cluster, starting at the beginning of the FAT }
     ffc := findfreeclust(3)
-    ser.printf1(string("first free cluster: %x\n\r"), ffc)
+    ser.printf1(string("    first free cluster: %x\n\r"), ffc)
     if (ffc < 3)
         return ENOSPC
+    ser.printf1(@"    fmode = %x\n\r", _fmode)
 
     { set up the file's initial metadata }
     fsetfname(fn_str)
@@ -263,6 +269,16 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
     fsetsize(0)
     fsetfirstclust(ffc)
     direntupdate(dirent_nr)
+    ser.str(@"    file mode is: ")
+    if (_fmode & O_RDONLY)
+        ser.str(@" O_RDONLY")
+    if (_fmode & O_WRITE)
+        ser.str(@" O_WRITE")
+    if (_fmode & O_CREAT)
+        ser.str(@" O_CREAT")
+    if (_fmode & O_APPEND)
+        ser.str(@" O_APPEND")
+    ser.newline
 
     { allocate a cluster }
     allocclust(ffc)
@@ -388,7 +404,7 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
         dirent_nr := 0
         repeat 16                               ' up to 16 entries per sector
             fclose2{}
-            ser.printf1(@"checking dirent #%d...\n\r", dirent_nr)
+            ser.printf1(@"    checking dirent #%d...\n\r", dirent_nr)
             fopenent(dirent_nr, O_RDONLY)    ' get current dirent's info
             { important: skip entries that are subdirs, deleted files, or the volume name,
                 but count them as dirents }
@@ -471,10 +487,11 @@ PUB FOpenEnt(file_nr, mode): status
     sd.rdblock(@_sect_buff, (rootdirsect{} + dirent2sect(file_nr)))
     readdirent(file_nr & $0f)               ' cache dirent metadata
     if (direntneverused{})
-        ser.strln(@"error: dirent unused")
-        fclose2{}
-        ser.strln(@"FOpenEnt(): [ret]")
-        return
+        ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
+            ser.strln(@"    error: dirent unused")
+            fclose2{}
+            ser.strln(@"FOpenEnt(): [ret]")
+            return
 
     ser.hexdump(@_dirent, 0, 4, 32, 16)
     ser.printf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext)
@@ -486,7 +503,8 @@ PUB FOpenEnt(file_nr, mode): status
     _fseek_pos := 0
     _fseek_sect := ffirstsect{}
     _fmode := mode
-    findlastclust{}
+    ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
+        findlastclust{}                         '   the file's last if creating it
 
     ser.strln(@"FOpenEnt(): [ret]")
     return fnumber{}
