@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 20, 2022
+    Updated Jun 21, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -423,7 +423,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
         fat_ent := clustrd(fat_ent)
         ser.printf1(@"    cl_nr: %x\n\r", cl_nr)
         ser.printf1(@"    fat_ent: %x\n\r", fat_ent)
-    while (fat_ent <> CLUST_EOC) and (fat_ent <> $0fff_fff8)
+    while not (clustiseoc(fat_ent))
     ser.printf1(string("    last clust is %x\n\r"), cl_nr)
     _last_clust := cl_nr
     ser.strln(@"FindLastClust(): [ret]")
