@@ -54,7 +54,9 @@ PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
     ser.startrxtx(24, 25, 0, 115200)
     time.msleep(10)
     ser.clear
+    ser.fgcolor(ser#yellow)
     ser.strln(string("SD/FAT debug started"))
+    ser.fgcolor(ser#grey)
     status := sd.init(SD_CS, SD_SCK, SD_MOSI, SD_MISO)
     if lookdown(status: 1..8)
         mount{}
@@ -333,14 +335,16 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             readdirent(dirent)                  ' get current file's info
             if (direntneverused{})              ' last directory entry
                 endofdir := true
+                fclose2{}
                 quit
             if (fdeleted{})                     ' ignore deleted files
                 dirent++
                 next
             if strcomp(fname{}, name_uc) and {
 }           strcomp(fnameext{}, ext_uc)         ' match found for filename; get
-                fclose{}
+                fclose2{}
                 return (dirent+(rds * DIRENTS)) '   number relative to entr. 0
+            fclose2{}
             dirent++
         rds++                                   ' go to next root dir sector
     until endofdir
