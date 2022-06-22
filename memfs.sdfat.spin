@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 21, 2022
+    Updated Jun 22, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -37,10 +37,8 @@ CON
 
 VAR
 
-    long _fseek_pos, _fseek_sect
     word _sect_offs
     byte _sect_buff[sd#SECT_SZ]
-    byte _fmode
 
 OBJ
 
