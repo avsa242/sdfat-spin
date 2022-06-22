@@ -220,7 +220,7 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
     { allocate/write EOC in the newly found free cluster }
     return allocclust(cl_free)
 
-PUB FClose2{}: status
+PUB FCloseEnt{}: status
 ' Close the currently opened file
 '   Returns:
 '       0 on success
@@ -230,9 +230,6 @@ PUB FClose2{}: status
         ser.strln(@"    error: no file open")
         ser.strln(@"FClose2(): [ret]")
         return ENOTOPEN                         ' file isn't open
-    _fseek_pos := 0
-    _fseek_sect := 0
-    _fmode := 0
     ser.printf1(@"    close number %d OK\n\r", fnumber{})
     fclose{}
     ser.strln(@"FClose2(): [ret]")
