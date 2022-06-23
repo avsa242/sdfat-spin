@@ -521,8 +521,12 @@ PUB FOpenEnt(file_nr, mode): status
         * cache the file's open mode
         * cache the file's last cluster number; it'll be used later if more need to be
             allocated }
-    _fseek_pos := 0
-    _fseek_sect := ffirstsect{}             ' initialize current sector with file's first
+    if (mode & O_APPEND)
+        mode |= O_WRITE                         ' in case it isn't already
+        fseek(fsize{})                          ' init seek pointer to end of file
+    else
+        _fseek_pos := 0
+        _fseek_sect := ffirstsect{}             ' initialize current sector with file's first
     _fmode := mode
     ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
         findlastclust{}                         '   the file's last if creating it
@@ -607,32 +611,28 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '       position seeked to,
 '       or error
     ser.strln(@"FSeek():")
+    longfill(@seek_clust, 0, 6)                 ' clear local vars
+
     if (fnumber{} < 0)
         ser.strln(@"error: no file open")
         return ENOTOPEN                         ' no file open
     if (pos < 0)                                ' catch bad seek positions
         ser.strln(@"error: illegal seek")
         return EBADSEEK
-    { allow a seek position greater than the file's current size only if it was opened
-        with _both_ the O_WRITE and O_APPEND bits }
-    if (pos => fsize{})
-        ser.strln(@"attempt to access beyond end of file:")
-        if ((_fmode & O_WRITE) and (_fmode & O_APPEND))
-            ser.strln(@"    mode IS write w/append(ok)")
-            if (pos < (ftotalclust{} * clustsz{}))
-                ser.strln(@"    seek pos IS within allocated clusters (ok)")
-                fsetsize(pos+1)                 ' grow file (*limited to clusters allocated)
-            else
-                ser.strln(@"    outside of allocated clusters (error)")
-                return EBADSEEK
-        else
-            ser.strln(@"    mode is NOT write and/or append (error)")
-            return EBADSEEK                     ' error: beyond end of file
+    if (pos > fsize{})
+        ifnot (_fmode & O_APPEND)
+            return EBADSEEK
 
-    longfill(@seek_clust, 0, 6)                 ' clear local vars
-
-    { initialize cluster number with the file's first cluster number }
-    clust_nr := ffirstclust{}
+    if ((_fmode & O_WRITE) and (_fmode & O_APPEND))
+        { if opened with the O_APPEND bit set, always point to the end of the file,
+        regardless of what FSeek() was called with }
+        clust_nr := _fclust_last
+        pos := fsize{}
+        ser.printf1(@"    clust_nr = %x\n\r", clust_nr)
+        ser.printf1(@"    pos = %d\n\r", pos)
+    else
+        { initialize cluster number with the file's first cluster number }
+        clust_nr := ffirstclust{}
 
     { determine which cluster (in "n'th" terms) in the chain the seek pos. is }
     seek_clust := (pos / clustsz{})
@@ -713,6 +713,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
         return EWRONGMODE                       ' must be open for writing
+
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
