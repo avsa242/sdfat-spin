@@ -52,7 +52,7 @@ PUB DIR{} | dirent, total, endofdir, t_files
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        sd.fclose2{}
+        sd.fcloseent{}
         sd.fopenent(dirent++, sd#O_RDONLY)      ' get current dirent's info
         if (sd.fisvolnm{})
             ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})

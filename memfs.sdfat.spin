@@ -225,14 +225,14 @@ PUB FCloseEnt{}: status
 '   Returns:
 '       0 on success
 '       ENOTOPEN if a file isn't currently open
-    ser.strln(@"FClose2():")
+    ser.strln(@"FCloseEnt():")
     if (fnumber{} < 0)
         ser.strln(@"    error: no file open")
         ser.strln(@"FClose2(): [ret]")
         return ENOTOPEN                         ' file isn't open
     ser.printf1(@"    close number %d OK\n\r", fnumber{})
     fclose{}
-    ser.strln(@"FClose2(): [ret]")
+    ser.strln(@"FCloseEnt(): [ret]")
     return 0
 
 PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
@@ -346,16 +346,16 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             readdirent(dirent)                  ' get current file's info
             if (direntneverused{})              ' last directory entry
                 endofdir := true
-                fclose2{}
+                fcloseent{}
                 quit
             if (fdeleted{})                     ' ignore deleted files
                 dirent++
                 next
             if strcomp(fname{}, name_uc) and {
 }           strcomp(fnameext{}, ext_uc)         ' match found for filename; get
-                fclose2{}
+                fcloseent{}
                 return (dirent+(rds * DIRENTS)) '   number relative to entr. 0
-            fclose2{}
+            fcloseent{}
             dirent++
         rds++                                   ' go to next root dir sector
     until endofdir
@@ -398,7 +398,7 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
     repeat
         dirent_nr := 0
         repeat 16                               ' up to 16 entries per sector
-            fclose2{}
+            fcloseent{}
             ser.printf1(@"    checking dirent #%d...\n\r", dirent_nr)
             fopenent(dirent_nr, O_RDONLY)    ' get current dirent's info
             { important: skip entries that are subdirs, deleted files, or the volume name,
@@ -411,7 +411,7 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
                 quit
             dirent_nr++
     until endofdir
-    fclose2{}
+    fcloseent{}
 
 PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
@@ -440,7 +440,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
         ser.printf1(@"    fat_ent: %x\n\r", fat_ent)
     while not (clustiseoc(fat_ent))
     ser.printf1(string("    last clust is %x\n\r"), cl_nr)
-    _last_clust := cl_nr
+    _fclust_last := cl_nr
     ser.strln(@"FindLastClust(): [ret]")
     return cl_nr
 
@@ -484,7 +484,7 @@ PUB FOpenEnt(file_nr, mode): status
     if (direntneverused{})
         ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
             ser.strln(@"    error: dirent unused")
-            fclose2{}
+            fcloseent{}
             ser.strln(@"FOpenEnt(): [ret]")
             return
 
@@ -496,11 +496,10 @@ PUB FOpenEnt(file_nr, mode): status
         * cache the file's last cluster number; it'll be used later if more need to be
             allocated }
     _fseek_pos := 0
-    _fseek_sect := ffirstsect{}
+    _fseek_sect := ffirstsect{}             ' initialize current sector with file's first
     _fmode := mode
     ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
         findlastclust{}                         '   the file's last if creating it
-
     ser.strln(@"FOpenEnt(): [ret]")
     return fnumber{}
 
@@ -570,7 +569,7 @@ PUB FRename(fn_old, fn_new): status | dirent
     fopenent(dirent, O_RDWR)
     fsetfname(fn_new)
     direntupdate(dirent)
-    fclose{}
+    fcloseent{}
 
 PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
