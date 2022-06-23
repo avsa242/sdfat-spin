@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 22, 2022
+    Updated Jun 23, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -34,6 +34,7 @@ CON
     O_RDWR      = O_RDONLY | O_WRITE            ' R/W
     O_CREAT     = (1 << 2)                      ' create file
     O_APPEND    = (1 << 3)                      ' W (allow file to grow)
+    O_TRUNC     = (1 << 4)                      ' truncate to 0 bytes
 
 VAR
 
@@ -234,6 +235,31 @@ PUB FCloseEnt{}: status
     fclose{}
     ser.strln(@"FCloseEnt(): [ret]")
     return 0
+
+PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
+' Count number of clusters used by currently open file
+    ifnot (fnumber{})
+        return ENOTOPEN
+
+    { clear the file's entire cluster chain to 0 }
+    clust_nr := ffirstclust{}
+    fat_sect := clustnum2fatsect(clust_nr)
+    status := readfat(fat_sect)
+    if (status <> 512)
+        ser.strln(string("read error"))
+        return ERDIO
+
+    'xxx the below doesn't go past the first sector of the FAT
+    t_clust := 0
+    repeat
+        { read next entry in chain before clearing the current one - need to know where
+            to go to next beforehand }
+        nx_clust := clustrd(clust_nr)
+        clustwr(clust_nr, 0)
+        clust_nr := nx_clust
+        t_clust++
+    while not (clustiseoc(clust_nr))
+    _fclust_tot := t_clust
 
 PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
 ' Create file
@@ -500,6 +526,8 @@ PUB FOpenEnt(file_nr, mode): status
     _fmode := mode
     ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
         findlastclust{}                         '   the file's last if creating it
+    if (mode & O_TRUNC)
+        ftrunc{}
     ser.strln(@"FOpenEnt(): [ret]")
     return fnumber{}
 
@@ -639,6 +667,41 @@ PUB FTell{}: pos
     if (fnumber{} < 0)
         return ENOTOPEN                         ' no file open
     return _fseek_pos
+
+PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
+' Truncate open file to 0 bytes
+    { except for the first one, clear the file's entire cluster chain to 0
+        If there's only one cluster, then nothing here needs to be done }
+    clust_nr := ffirstclust{}
+    fat_sect := clustnum2fatsect(clust_nr)
+    clust_cnt := fcountclust{}
+
+    if (clust_cnt > 1)
+        status := readfat(fat_sect)
+        if (status <> 512)
+            ser.strln(string("read error"))
+            repeat
+        ser.printf1(@"more than 1 cluster (%d)\n", clust_cnt)
+        clust_nr := clustrd(clust_nr)        ' go to the second cluster, if there is one
+        repeat clust_cnt
+            { read next entry in chain before clearing the current one - need to know where
+                to go to next beforehand }
+            nx_clust := clustrd(clust_nr)
+            clustwr(clust_nr, 0)
+            clust_nr := nx_clust
+        clustwr(ffirstclust{}, CLUST_EOC)
+        { write modified FAT back to disk }
+        if (writefat(fat_sect) <> 512)
+            ser.printf1(string("write error %d\n\r"), status)
+            repeat
+
+    { set filesize to 0 }
+    fsetsize(0)
+    direntupdate(fnumber{})
+
+    ser.strln(@"Updated FAT")
+    readfat(0)
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 
 PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 ' Write buffer to card
