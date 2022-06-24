@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 23, 2022
+    Updated Jun 24, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -95,6 +95,7 @@ PUB Mount{}: status
 
 PUB AllocClust(cl_nr): status | tmp, fat_sect
 ' Allocate a new cluster
+'   Returns: cluster number allocated
     ser.strln(string("AllocClust():"))
     ifnot (_fmode & O_WRITE)                    ' file must be opened for writing
         ser.strln(string("    bad file mode"))
@@ -201,7 +202,7 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
         ser.strln(@"error: no file open")
         return ENOTOPEN
     { find last cluster # of file }
-    flc := _last_clust
+    flc := _fclust_last
     ser.printf1(@"last cluster: %x\n\r", flc)
 
     { find a free cluster }
@@ -219,7 +220,8 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
         return EWRIO
 
     { allocate/write EOC in the newly found free cluster }
-    return allocclust(cl_free)
+    status := allocclust(cl_free)
+    _fclust_last := status
 
 PUB FCloseEnt{}: status
 ' Close the currently opened file
@@ -670,20 +672,19 @@ PUB FTell{}: pos
 
 PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
 ' Truncate open file to 0 bytes
-    { except for the first one, clear the file's entire cluster chain to 0
-        If there's only one cluster, then nothing here needs to be done }
+    { except for the first one, clear the file's entire cluster chain to 0 }
     clust_nr := ffirstclust{}
     fat_sect := clustnum2fatsect(clust_nr)
     clust_cnt := fcountclust{}
 
-    if (clust_cnt > 1)
-        status := readfat(fat_sect)
+    if (clust_cnt > 1)                          ' if there's only one cluster, nothing here
+        status := readfat(fat_sect)             '   needs to be done
         if (status <> 512)
             ser.strln(string("read error"))
             repeat
         ser.printf1(@"more than 1 cluster (%d)\n", clust_cnt)
-        clust_nr := clustrd(clust_nr)        ' go to the second cluster, if there is one
-        repeat clust_cnt
+        clust_nr := clustrd(clust_nr)           ' immediately skip to the next cluster - make sure
+        repeat clust_cnt                        '   the first one _doesn't_ get cleared out
             { read next entry in chain before clearing the current one - need to know where
                 to go to next beforehand }
             nx_clust := clustrd(clust_nr)
@@ -714,6 +715,16 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     ifnot (_fmode & O_WRITE)
         return EWRONGMODE                       ' must be open for writing
 
+    ser.printf3(@"%d + %d > %d?\n\r", ftell{}, len, fphyssize{})
+    if ((ftell{} + len) > (fphyssize{}-1))      ' is req'd size larger than allocated space?
+        ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
+            return EBADSEEK
+        ser.fgcolor(ser#green)
+        ser.strln(@"yes - allocating another cluster")
+        ser.fgcolor(ser#grey)
+        fallocate{}                             ' if yes, then allocate another cluster
+    else
+        ser.strln(@"no")
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
@@ -735,7 +746,6 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         status := sd.wrblock(@_sect_buff, _fseek_sect)
         if (status == sd#SECT_SZ)
             { update position to advance by how much was just written }
-
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
 

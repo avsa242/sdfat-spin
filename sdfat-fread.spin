@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRead() example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 18, 2022
+    Updated Jun 24, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -60,7 +60,9 @@ PUB Main | err, fn, pos, act_read, cmd
         act_read := sd.fread(@_sect_buff, 512)  ' NOTE: this advances the seek pointer by 512
         if (act_read < 1)
             ser.position(0, 4)
+            ser.fgcolor(ser#RED)
             perr(@"Read error: ", act_read)
+            ser.fgcolor(ser#GREY)
             ser.charin{}
             ser.position(0, 4)
             ser.clearline{}
