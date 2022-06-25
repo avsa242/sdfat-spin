@@ -7,10 +7,26 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 
 ## Salient Features
 
+* FAT32 on SDHC/SDXC
 * Open file by name or dirent number
-* Find free cluster, allocate a cluster
-* Read currently opened file's attributes: file name and extension, is directory, is the volume name, size
+* Read currently opened file's attributes: file name and extension, is directory, is the volume name, size, date, time
 * Read, write a block of data
+* File management: rename, delete, create, find by filename
+* Cluster management: Find free cluster, allocate an arbitrary cluster, allocate block of clusters, allocate additional cluster for currently open file, count clusters allocated to file
+* POSIX-ish familiarities: (some) method names and params, file open modes
+
+## File open modes supported
+
+| Symbol	| Description 					| Seek behavior allowed	|
+|---------------|-----------------------------------------------|-----------------------|
+| `O_RDONLY`	| Read 						| random               	|
+| `O_WRITE`	| Write 					| random		|
+| `O_RDWR`	| Read/Write 					| random		|
+| `O_CREAT`	| Create file 					| n/a			|
+| `O_APPEND`	| Writes append to file	 			| always points to EOF	|
+| `O_TRUNC`	| Truncate file to 0 bytes after opening	| n/a			|
+
+(modes are bitfields that can be OR'd together)
 
 ## Requirements
 
@@ -36,4 +52,6 @@ P1/SPIN1:
 ## Limitations
 
 * Very early in development - may malfunction, or outright fail to build
-* TBD
+* FAT16, FAT12 not yet supported
+* Pre-SDHC cards unsupported
+
