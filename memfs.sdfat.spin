@@ -775,6 +775,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
     ser.strln(@"FWrite() [ret]")
+    direntupdate(fnumber{})
 
 PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
