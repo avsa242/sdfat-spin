@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 24, 2022
+    Updated Jun 25, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -104,8 +104,10 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
 
     { read FAT sector }
     fat_sect := clustnum2fatsect(cl_nr)
-    if (readfat(fat_sect) <> 512)
+    if (status := readfat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     { check the requested cluster number - is it free? }
@@ -119,8 +121,10 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
     { write the updated FAT sector to SD }
     ser.strln(string("    updated FAT: "))
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-    if (writefat(fat_sect) <> 512)
-        ser.strln(string("    write error"))
+    if (status := writefat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    write error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         ser.strln(string("AllocClust(): [ret]"))
         return EWRIO
 
@@ -143,7 +147,9 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
     { read FAT sector }
     fat_sect := clustnum2fatsect(cl_st_nr)
     if (readfat(fat_sect) <> 512)
-        ser.printf1(string("read error %d\n\r"), status)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     last_cl := (cl_st_nr + (count-1))
@@ -163,8 +169,10 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
     clustwr(last_cl, CLUST_EOC)
 
     { write updated FAT sector }
-    if (writefat(fat_sect) <> 512)
-        ser.printf1(string("write error %d\n\r"), status)
+    if (status := writefat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    write error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return EWRIO
 
     return count
@@ -179,7 +187,9 @@ PUB DirentUpdate(dirent_nr): status
     ser.strln(@"    rdblock")
     status := sd.rdblock(@_sect_buff, dirent2abssect(dirent_nr))
     if (status < 0)
-        ser.strln(string("    read error"))
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         ser.strln(@"DirentUpdate(): [ret]")
         return ERDIO
 
@@ -190,7 +200,9 @@ PUB DirentUpdate(dirent_nr): status
     ser.strln(@"    wrblock")
     status := sd.wrblock(@_sect_buff, dirent2abssect(dirent_nr))
     if (status < 0)
-        ser.strln(string("    write error"))
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    write error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         ser.strln(@"DirentUpdate(): [ret]")
         return EWRIO
     ser.strln(@"DirentUpdate(): [ret]")
@@ -207,16 +219,25 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
 
     { find a free cluster }
     cl_free := findfreeclust(flc)
+    if (cl_free < 0)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
+        return cl_free
     ser.printf1(@"free cluster found: %x\n\r", cl_free)
 
     { rewrite the file's last cluster entry to point to the newly found free cluster }
     fat_sect := clustnum2fatsect(flc)
     if (readfat(fat_sect) <> 512)
-        ser.printf1(string("read error %d\n\r"), status)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return ERDIO
     clustwr(flc, cl_free)
-    if (writefat(fat_sect) <> 512)
-        ser.printf1(string("write error %d\n\r"), status)
+    if (status := writefat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    write error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return EWRIO
 
     { allocate/write EOC in the newly found free cluster }
@@ -248,7 +269,9 @@ PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
     fat_sect := clustnum2fatsect(clust_nr)
     status := readfat(fat_sect)
     if (status <> 512)
-        ser.strln(string("read error"))
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     'xxx the below doesn't go past the first sector of the FAT
@@ -330,7 +353,9 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
     fat_sect := clustnum2fatsect(clust_nr)
     status := readfat(fat_sect)
     if (status <> 512)
-        ser.strln(string("read error"))
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     repeat ftotalclust{}
@@ -341,8 +366,10 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
         clust_nr := nx_clust
 
     { write modified FAT back to disk }
-    if (writefat(fat_sect) <> 512)
-        ser.printf1(string("write error %d\n\r"), status)
+    if (status := writefat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    write error %d\n\r"), status)
+        ser.fgcolor(ser#GREY)
         return EWRIO
 
     return dirent
@@ -402,8 +429,10 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
     fat_ent := st_from
     fat_sect := clustnum2fatsect(st_from)
     ser.printf1(@"fat_ent = %d\n\r", fat_ent)
-    if (readfat(fat_sect) <> 512)
-        ser.strln(string("read error"))
+    if (avail := readfat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), avail)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     { starting with the cluster # called for, look for an unused one }
@@ -456,8 +485,10 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
     ser.printf1(@"    first clust: %x\n\r", fat_ent)
     { read the FAT }
     fat_sect := clustnum2fatsect(fat_ent)
-    if (readfat(fat_sect) <> 512)
-        ser.strln(string("    read error"))
+    if (cl_nr := readfat(fat_sect) <> 512)
+        ser.fgcolor(ser#BRIGHT | ser#RED)
+        ser.printf1(string("    read error %d\n\r"), cl_nr)
+        ser.fgcolor(ser#GREY)
         return ERDIO
 
     { follow chain }
@@ -614,7 +645,6 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 '       or error
     ser.strln(@"FSeek():")
     longfill(@seek_clust, 0, 6)                 ' clear local vars
-
     if (fnumber{} < 0)
         ser.strln(@"error: no file open")
         return ENOTOPEN                         ' no file open
@@ -625,16 +655,8 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
         ifnot (_fmode & O_APPEND)
             return EBADSEEK
 
-    if ((_fmode & O_WRITE) and (_fmode & O_APPEND))
-        { if opened with the O_APPEND bit set, always point to the end of the file,
-        regardless of what FSeek() was called with }
-        clust_nr := _fclust_last
-        pos := fsize{}
-        ser.printf1(@"    clust_nr = %x\n\r", clust_nr)
-        ser.printf1(@"    pos = %d\n\r", pos)
-    else
-        { initialize cluster number with the file's first cluster number }
-        clust_nr := ffirstclust{}
+    { initialize cluster number with the file's first cluster number }
+    clust_nr := ffirstclust{}
 
     { determine which cluster (in "n'th" terms) in the chain the seek pos. is }
     seek_clust := (pos / clustsz{})
@@ -680,8 +702,10 @@ PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
     if (clust_cnt > 1)                          ' if there's only one cluster, nothing here
         status := readfat(fat_sect)             '   needs to be done
         if (status <> 512)
-            ser.strln(string("read error"))
-            repeat
+            ser.fgcolor(ser#BRIGHT | ser#RED)
+            ser.printf1(string("    read error %d\n\r"), status)
+            ser.fgcolor(ser#GREY)
+            return
         ser.printf1(@"more than 1 cluster (%d)\n", clust_cnt)
         clust_nr := clustrd(clust_nr)           ' immediately skip to the next cluster - make sure
         repeat clust_cnt                        '   the first one _doesn't_ get cleared out
@@ -692,9 +716,11 @@ PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
             clust_nr := nx_clust
         clustwr(ffirstclust{}, CLUST_EOC)
         { write modified FAT back to disk }
-        if (writefat(fat_sect) <> 512)
-            ser.printf1(string("write error %d\n\r"), status)
-            repeat
+        if (status := writefat(fat_sect) <> 512)
+            ser.fgcolor(ser#BRIGHT | ser#RED)
+            ser.printf1(string("    write error %d\n\r"), status)
+            ser.fgcolor(ser#GREY)
+            return
 
     { set filesize to 0 }
     fsetsize(0)
@@ -714,24 +740,22 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
         return EWRONGMODE                       ' must be open for writing
-
-    ser.printf3(@"%d + %d > %d?\n\r", ftell{}, len, fphyssize{})
+    fcountclust{}
     if ((ftell{} + len) > (fphyssize{}-1))      ' is req'd size larger than allocated space?
         ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
             return EBADSEEK
         ser.fgcolor(ser#green)
-        ser.strln(@"yes - allocating another cluster")
+        ser.strln(@"    allocating another cluster")
         ser.fgcolor(ser#grey)
         fallocate{}                             ' if yes, then allocate another cluster
-    else
-        ser.strln(@"no")
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
-        ser.printf1(@"nr_left = %d\n\r", nr_left)
+        ser.printf1(@"    nr_left = %d\n\r", nr_left)
         { how much of the total to write to this sector }
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
-        ser.printf1(@"sect_wrsz = %d\n\r", sect_wrsz)
+        ser.printf1(@"    _sect_offs = %d\n\r", _sect_offs)
+        ser.printf1(@"    sect_wrsz = %d\n\r", sect_wrsz)
         bytefill(@_sect_buff, 0, sectsz{})
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
@@ -745,28 +769,29 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 
         status := sd.wrblock(@_sect_buff, _fseek_sect)
         if (status == sd#SECT_SZ)
+            if (_fmode & O_APPEND)              ' if appending, update size in dirent cache
+                fsetsize(fsize{} + sect_wrsz)
             { update position to advance by how much was just written }
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
-
     ser.strln(@"FWrite() [ret]")
 
 PUB ReadFAT(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
-    ser.strln(@"ReadFAT():")
+'    ser.strln(@"ReadFAT():")
     bytefill(@_sect_buff, 0, 512)
     resp := sd.rdblock(@_sect_buff, (fat1start{} + fat_sect))
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-    ser.strln(@"ReadFAT(): [ret]")
+'    ser.strln(@"ReadFAT(): [ret]")
 
 PUB WriteFAT(fat_sect): resp
 ' Write the FAT from the sector buffer
 '   fat_sect: sector of the FAT to write
-    ser.strln(@"WriteFAT():")
+'    ser.strln(@"WriteFAT():")
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     resp := sd.wrblock(@_sect_buff, (fat1start{} + fat_sect))
-    ser.strln(@"WriteFAT(): [ret]")
+'    ser.strln(@"WriteFAT(): [ret]")
 
 #include "filesystem.block.fat.spin"
 

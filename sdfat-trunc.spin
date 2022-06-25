@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi"
+    ser : "com.serial.terminal.ansi-new"
     time: "time"
     sd  : "memfs.sdfat"
 
@@ -47,12 +47,12 @@ PUB Main | err, fn, sect
 
     err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n"), err)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n"), err)
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
 
-    fn := @"TESTFIL3.TXT"
+    fn := @"TEST0004.TXT"
     err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
     if (err < 0)
         perr(@"FOpen(): ", err)

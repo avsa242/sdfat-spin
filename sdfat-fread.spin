@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi"
+    ser : "com.serial.terminal.ansi-new"
     time: "time"
     sd  : "memfs.sdfat"
 
@@ -43,18 +43,19 @@ PUB Main | err, fn, pos, act_read, cmd
 
     err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n"), err)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n"), err)
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
 
-    fn := @"TESTFIL3.TXT"
+    fn := @"TEST0004.TXT"
     err := sd.fopen(fn, sd#O_RDONLY)
     if (err < 0)
         perr(@"FOpen(): ", err)
         repeat
 
     repeat
+        ser.clear
         bytefill(@_sect_buff, 0, 512)
         pos := sd.ftell{}                       ' get current seek position
         act_read := sd.fread(@_sect_buff, 512)  ' NOTE: this advances the seek pointer by 512
@@ -68,8 +69,8 @@ PUB Main | err, fn, pos, act_read, cmd
             ser.clearline{}
 
         ser.position(0, 5)
-        ser.printf1(@"fseek(): %d   \n", pos)
-        ser.hexdump(@_sect_buff, pos, 8, 512, 16)
+        ser.printf1(@"fseek(): %d    \n\r", pos)
+        ser.hexdump(@_sect_buff, pos, 8, 512 <# act_read, 16 <# act_read)
         repeat until (cmd := ser.charin)
         case cmd
             "[":
