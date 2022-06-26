@@ -5,7 +5,7 @@
     Description: FATfs on SD: truncate file to 0 bytes
     Copyright (c) 2022
     Started Jun 23, 2022
-    Updated Jun 23, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -53,7 +53,7 @@ PUB Main | err, fn, sect
         ser.printf1(string("Mounted card (%d)\n\r"), err)
 
     fn := @"TEST0004.TXT"
-    err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
+    err := \sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
     if (err < 0)
         perr(@"FOpen(): ", err)
         repeat

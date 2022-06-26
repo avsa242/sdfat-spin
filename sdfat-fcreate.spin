@@ -5,7 +5,7 @@
     Description: FATfs on SD: directory listing example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 12, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -47,7 +47,7 @@ PUB Main{} | err, dirent
     else
         ser.printf1(string("Mounted card (%d)\n\r"), err)
 
-    dirent := sd.fcreate(@_fname, sd#FATTR_ARC)
+    dirent := \sd.fcreate(@_fname, sd#FATTR_ARC)
     if (dirent < 0)
         perr(@"Error creating file: ", dirent)
         repeat

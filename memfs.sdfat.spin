@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 25, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -23,6 +23,7 @@ CON
     EEXIST      = -9                            ' file already exists
     ENOSPC      = -10                           ' no space left on device or no free clusters
     EINVAL      = -11                           ' invalid argument
+    EFSCORRUPT  = -12                           ' filesystem inconsistency or corruption
 
     ENOTIMPLM   = -256                          ' not implemented
     EWRIO       = -512 {$ff_ff_e0_00}           ' I/O error (writing)
@@ -100,7 +101,7 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
     ifnot (_fmode & O_WRITE)                    ' file must be opened for writing
         ser.strln(string("    bad file mode"))
         ser.strln(string("AllocClust(): [ret]"))
-        return EWRONGMODE
+        abort EWRONGMODE
 
     { read FAT sector }
     fat_sect := clustnum2fatsect(cl_nr)
@@ -108,12 +109,12 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     { check the requested cluster number - is it free? }
     if (clustrd(cl_nr) <> 0)
         ser.strln(@"    cluster in use")
-        return ECL_INUSE
+        abort ECL_INUSE
 
     { write the EOC marker into the newly allocated entry }
     clustwr(cl_nr, CLUST_EOC)
@@ -126,7 +127,7 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
         ser.printf1(string("    write error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
         ser.strln(string("AllocClust(): [ret]"))
-        return EWRIO
+        abort EWRIO
 
     ser.strln(string("AllocClust(): [ret]"))
     return cl_nr
@@ -142,7 +143,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 
     { validate the starting cluster number and count }
     if ((cl_st_nr < 3) or (count < 1))
-        return EINVAL
+        abort EINVAL
 
     { read FAT sector }
     fat_sect := clustnum2fatsect(cl_st_nr)
@@ -150,7 +151,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     last_cl := (cl_st_nr + (count-1))
     { before trying to allocate clusters, check that the requested number of them are free }
@@ -158,7 +159,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
         ser.printf1(@"cluster %d? ", cl_nr)
         if (clustrd(cl_nr) <> 0)
             ser.strln(@"in use - fail")
-            return ENOSPC                       ' cluster is in use
+            abort ENOSPC                        ' cluster is in use
         ser.strln(@"free")
 
     { link clusters, from first to one before the last one }
@@ -173,7 +174,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    write error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return EWRIO
+        abort EWRIO
 
     return count
 
@@ -191,7 +192,7 @@ PUB DirentUpdate(dirent_nr): status
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
         ser.strln(@"DirentUpdate(): [ret]")
-        return ERDIO
+        abort ERDIO
 
     { copy currently cached dirent to sector buffer }
     bytemove(@_sect_buff+direntstart(dirent_nr), @_dirent, DIRENT_LEN)
@@ -204,7 +205,7 @@ PUB DirentUpdate(dirent_nr): status
         ser.printf1(string("    write error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
         ser.strln(@"DirentUpdate(): [ret]")
-        return EWRIO
+        abort EWRIO
     ser.strln(@"DirentUpdate(): [ret]")
 
 PUB FAllocate{}: status | flc, cl_free, fat_sect
@@ -212,7 +213,7 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
     ser.strln(@"FAllocate():")
     ifnot (_file_nr)
         ser.strln(@"error: no file open")
-        return ENOTOPEN
+        abort ENOTOPEN
     { find last cluster # of file }
     flc := _fclust_last
     ser.printf1(@"last cluster: %x\n\r", flc)
@@ -232,13 +233,13 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
     clustwr(flc, cl_free)
     if (status := writefat(fat_sect) <> 512)
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    write error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return EWRIO
+        abort EWRIO
 
     { allocate/write EOC in the newly found free cluster }
     status := allocclust(cl_free)
@@ -253,7 +254,7 @@ PUB FCloseEnt{}: status
     if (fnumber{} < 0)
         ser.strln(@"    error: no file open")
         ser.strln(@"FClose2(): [ret]")
-        return ENOTOPEN                         ' file isn't open
+        abort ENOTOPEN                          ' file isn't open
     ser.printf1(@"    close number %d OK\n\r", fnumber{})
     fclose{}
     ser.strln(@"FCloseEnt(): [ret]")
@@ -262,7 +263,7 @@ PUB FCloseEnt{}: status
 PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
 ' Count number of clusters used by currently open file
     ifnot (fnumber{})
-        return ENOTOPEN
+        abort ENOTOPEN
 
     { clear the file's entire cluster chain to 0 }
     clust_nr := ffirstclust{}
@@ -272,7 +273,7 @@ PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     'xxx the below doesn't go past the first sector of the FAT
     t_clust := 0
@@ -293,7 +294,7 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
 
     { first, verify a file with the same name doesn't already exist }
     if (find(fn_str) <> ENOTFOUND)
-        return EEXIST
+        abort EEXIST
 
     { find a free directory entry, and open it read/write }
     dirent_nr := findfreedirent{}
@@ -305,7 +306,7 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
     ffc := findfreeclust(3)
     ser.printf1(string("    first free cluster: %x\n\r"), ffc)
     if (ffc < 3)
-        return ENOSPC
+        abort ENOSPC
     ser.printf1(@"    fmode = %x\n\r", _fmode)
 
     { set up the file's initial metadata }
@@ -341,7 +342,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
     { verify file exists }
     dirent := find(fn_str)
     if (dirent < 0)
-        return ENOTFOUND
+        abort ENOTFOUND
 
     { rename file with first byte set to FATTR_DEL ($E5) }
     fopenent(dirent, O_RDWR)
@@ -356,7 +357,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     repeat ftotalclust{}
         { read next entry in chain before clearing the current one - need to know where
@@ -370,7 +371,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    write error %d\n\r"), status)
         ser.fgcolor(ser#GREY)
-        return EWRIO
+        abort EWRIO
 
     return dirent
 
@@ -416,7 +417,7 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     until endofdir
     ser.strln(@"    error: not found")
     ser.strln(@"Find(): [ret]")
-    return ENOTFOUND
+    abort ENOTFOUND
 
 PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
 ' Find a free cluster, starting from cluster #
@@ -433,7 +434,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), avail)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     { starting with the cluster # called for, look for an unused one }
     sect_offs := clustnum2offs(st_from)
@@ -446,7 +447,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
 
     { if this point is reached, no free clusters were found }
     ser.strln(@"FindFreeClust(): [ret]")
-    return ENOSPC
+    abort ENOSPC
 
 PUB FindFreeDirent{}: dirent_nr | endofdir
 ' Find free directory entry
@@ -477,11 +478,18 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
     ser.strln(string("FindLastClust():"))
     if (fnumber{} < 0)
         ser.strln(string("    error: no file open"))
-        return ENOTOPEN
+        abort ENOTOPEN
     ser.printf1(@"    file number is %d\n\r", fnumber{})
 
     cl_nr := 0
     fat_ent := ffirstclust{}
+    { try to catch some invalid cases - these are signs there's something seriously
+        wrong with the filesystem }
+    if (fat_ent & $f000_000)                    ' top 4 bits of clust nr set? they shouldn't be...
+        ser.fgcolor(ser#RED)
+        ser.printf1(@"error: invalid FAT entry %x\n\r", fat_ent)
+        ser.fgcolor(ser#GREY)
+        abort EFSCORRUPT
     ser.printf1(@"    first clust: %x\n\r", fat_ent)
     { read the FAT }
     fat_sect := clustnum2fatsect(fat_ent)
@@ -489,7 +497,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), cl_nr)
         ser.fgcolor(ser#GREY)
-        return ERDIO
+        abort ERDIO
 
     { follow chain }
     repeat
@@ -514,14 +522,14 @@ PUB FOpen(fn_str, mode): status
     ser.strln(@"FOpen():")
     if (fnumber{} => 0)                              ' file is already open
         ser.strln(@"    error: already open")   'xxx bit of duplication with FOpenEnt()
-        return EOPEN
+        abort EOPEN
     status := find(fn_str)                      ' look for file by name
 '    if (_fmode & O_CREAT)
 '        status := fcreate(fn_str, FATTR_ARC)
 '    else
     if (status == ENOTFOUND)                ' file not found
         ser.strln(@"    error: not found")
-        return ENOTFOUND
+        abort ENOTFOUND
     ser.printf1(@"    found file, dirent # %d\n\r", status)
     status := fopenent(status, mode)
     ser.strln(@"FOpen(): [ret]")
@@ -537,7 +545,7 @@ PUB FOpenEnt(file_nr, mode): status
     ser.strln(string("FOpenEnt():"))
     if (fnumber{} => 0)
         ser.strln(string("    already open"))
-        return EOPEN
+        abort EOPEN
     sd.rdblock(@_sect_buff, (rootdirsect{} + dirent2sect(file_nr)))
     readdirent(file_nr & $0f)               ' cache dirent metadata
     if (direntneverused{})
@@ -548,7 +556,8 @@ PUB FOpenEnt(file_nr, mode): status
             return
 
     ser.hexdump(@_dirent, 0, 4, 32, 16)
-    ser.printf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext)
+'    ser.printf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext) 'xxx corruption in debug output?
+    ser.printf1(@"    opened file/dirent # %d\n\r", fnumber{})
     { set up the initial state:
         * set the seek pointer to the file's beginning
         * cache the file's open mode
@@ -578,7 +587,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '       or error
     ser.strln(@"FRead():")
     if (fnumber{} < 0)                          ' no file open
-        return ENOTOPEN
+        abort ENOTOPEN
 
     nr_read := nr_left := 0
 
@@ -595,7 +604,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
             and copy as many bytes as possible from it into the user's buffer }
         resp := sd.rdblock(@_sect_buff, _fseek_sect)
         if (resp < 1)
-            return ERDIO
+            abort ERDIO
 
         movbytes := sectsz{}-_sect_offs
         bytemove(ptr_dest, (@_sect_buff+_sect_offs), movbytes <# nr_bytes)
@@ -611,7 +620,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         fseek(_fseek_pos + nr_read)             ' update seek pointer
         return nr_read
     else
-        return EEOF                             ' reached end of file
+        abort EEOF                              ' reached end of file
     ser.strln(@"FRead(): [ret]")
 
 PUB FRename(fn_old, fn_new): status | dirent
@@ -625,11 +634,11 @@ PUB FRename(fn_old, fn_new): status | dirent
     dirent := find(fn_old)
     if (dirent < 0)
         ser.strln(@"file not found")
-        return ENOTFOUND
+        abort ENOTFOUND
 
     { verify new filename is valid }
     if (strcomp(fn_old, fn_new))
-        return EEXIST
+        abort EEXIST
 
     fopenent(dirent, O_RDWR)
     fsetfname(fn_new)
@@ -647,13 +656,13 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     longfill(@seek_clust, 0, 6)                 ' clear local vars
     if (fnumber{} < 0)
         ser.strln(@"error: no file open")
-        return ENOTOPEN                         ' no file open
+        abort ENOTOPEN                          ' no file open
     if (pos < 0)                                ' catch bad seek positions
         ser.strln(@"error: illegal seek")
-        return EBADSEEK
+        abort EBADSEEK
     if (pos > fsize{})
         ifnot (_fmode & O_APPEND)
-            return EBADSEEK
+            abort EBADSEEK
 
     { initialize cluster number with the file's first cluster number }
     clust_nr := ffirstclust{}
@@ -689,7 +698,7 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
 PUB FTell{}: pos
 ' Get current seek position in currently opened file
     if (fnumber{} < 0)
-        return ENOTOPEN                         ' no file open
+        abort ENOTOPEN                          ' no file open
     return _fseek_pos
 
 PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
@@ -737,13 +746,13 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 '       NOTE: a full sector is always written
     ser.strln(@"FWrite():")
     if (fnumber{} < 0)
-        return ENOTOPEN                         ' no file open
+        abort ENOTOPEN                          ' no file open
     ifnot (_fmode & O_WRITE)
-        return EWRONGMODE                       ' must be open for writing
+        abort EWRONGMODE                        ' must be open for writing
     fcountclust{}
     if ((ftell{} + len) > (fphyssize{}-1))      ' is req'd size larger than allocated space?
         ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
-            return EBADSEEK
+            abort EBADSEEK
         ser.fgcolor(ser#green)
         ser.strln(@"    allocating another cluster")
         ser.fgcolor(ser#grey)
@@ -762,7 +771,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         { read the sector's current contents, so it can be merged with this write }
             resp := sd.rdblock(@_sect_buff, _fseek_sect)
             if (resp < 1)
-                return ERDIO
+                abort ERDIO
 
         { copy the next chunk of data to the sector buffer }
         bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)

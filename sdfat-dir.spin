@@ -5,7 +5,7 @@
     Description: FATfs on SD: directory listing example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 12, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -45,15 +45,18 @@ PUB Main{} | err
     dir{}
     repeat
 
-PUB DIR{} | dirent, total, endofdir, t_files
+PUB DIR{}: status | dirent, total, endofdir, t_files
 ' Display directory listing
     dirent := 0
     total := 0
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        sd.fcloseent{}
-        sd.fopenent(dirent++, sd#O_RDONLY)      ' get current dirent's info
+        \sd.fcloseent{}
+        status := \sd.fopenent(dirent++, sd#O_RDONLY)      ' get current dirent's info
+        if (status < 0)
+            perr(@"Error opening: ", status)
+            repeat
         if (sd.fisvolnm{})
             ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})
             next
@@ -77,4 +80,5 @@ PUB DIR{} | dirent, total, endofdir, t_files
     ser.printf2(string("\n\r\n\r%d Files, total: %d bytes\n\r"), t_files, total)
 
 #include "fatfs-common.spinh"
+#include "sderr.spinh"
 

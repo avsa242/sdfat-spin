@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRead() example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 24, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -49,7 +49,7 @@ PUB Main | err, fn, pos, act_read, cmd
         ser.printf1(string("Mounted card (%d)\n\r"), err)
 
     fn := @"TEST0004.TXT"
-    err := sd.fopen(fn, sd#O_RDONLY)
+    err := \sd.fopen(fn, sd#O_RDONLY)
     if (err < 0)
         perr(@"FOpen(): ", err)
         repeat
@@ -58,7 +58,7 @@ PUB Main | err, fn, pos, act_read, cmd
         ser.clear
         bytefill(@_sect_buff, 0, 512)
         pos := sd.ftell{}                       ' get current seek position
-        act_read := sd.fread(@_sect_buff, 512)  ' NOTE: this advances the seek pointer by 512
+        act_read := \sd.fread(@_sect_buff, 512)  ' NOTE: this advances the seek pointer by 512
         if (act_read < 1)
             ser.position(0, 4)
             ser.fgcolor(ser#RED)

@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRename() example code
     Copyright (c) 2022
     Started Jun 15, 2022
-    Updated Jun 15, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -42,7 +42,7 @@ PUB Main{} | err
     else
         ser.printf1(@"Mounted card (%d)\n\r", err)
 
-    err := sd.frename(@"TEST0001.TXT", @"TEST0005.TXT")
+    err := \sd.frename(@"TEST0001.TXT", @"TEST0005.TXT")
     if (err < 0)
         perr(@"Error renaming: ", err)
         repeat

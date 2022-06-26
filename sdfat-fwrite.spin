@@ -5,7 +5,7 @@
     Description: FATfs on SD: FWrite() example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 18, 2022
+    Updated Jun 26, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -53,7 +53,7 @@ PUB Main | err, fn, pos, cmd
         ser.printf1(string("Mounted card (%d)\n"), err)
 
     fn := @"TESTFIL3.TXT"
-    err := sd.fopen(fn, sd#O_RDWR)
+    err := \sd.fopen(fn, sd#O_RDWR)
     if (err < 0)
         perr(@"FOpen(): ", err)
         repeat
@@ -62,7 +62,7 @@ PUB Main | err, fn, pos, cmd
     sd.fseek(0)
     clearbuff{}
     bytemove(@_sect_buff, @_test_str, strsize(@_test_str))
-    err := sd.fwrite(@_sect_buff, strsize(@_test_str))
+    err := \sd.fwrite(@_sect_buff, strsize(@_test_str))
     if (err < 0)
         perr(@"fwrite(): ", err)
         repeat
@@ -73,7 +73,7 @@ PUB Main | err, fn, pos, cmd
         ser.clear{}
         bytefill(@_sect_buff, 0, 512)
         pos := sd.ftell{}                       ' get current seek position
-        err := sd.fread(@_sect_buff, 512)       ' reading advances the seek pointer by the number
+        err := \sd.fread(@_sect_buff, 512)       ' reading advances the seek pointer by the number
                                                 '   of bytes actually read
         if (err < 1)
             ser.position(0, 0)
