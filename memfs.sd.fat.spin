@@ -41,7 +41,7 @@ OBJ
     sd  : "memory.flash.sd.spi"
     fat : "filesystem.block.fat"
     str : "string"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     time: "time"
 
 PUB Null{}

@@ -55,7 +55,7 @@ PUB Main | err, fn, pos, cmd
     fn := @"TESTFIL3.TXT"
     err := \sd.fopen(fn, sd#O_RDWR)
     if (err < 0)
-        perr(@"FOpen(): ", err)
+        perror(@"FOpen(): ", err)
         repeat
 
     { write test string to file }
@@ -64,7 +64,7 @@ PUB Main | err, fn, pos, cmd
     bytemove(@_sect_buff, @_test_str, strsize(@_test_str))
     err := \sd.fwrite(@_sect_buff, strsize(@_test_str))
     if (err < 0)
-        perr(@"fwrite(): ", err)
+        perror(@"fwrite(): ", err)
         repeat
 
     clearbuff{}
@@ -77,7 +77,7 @@ PUB Main | err, fn, pos, cmd
                                                 '   of bytes actually read
         if (err < 1)
             ser.position(0, 0)
-            perr(@"Read error: ", err)
+            perror(@"Read error: ", err)
             ser.charin{}
             ser.position(0, 0)
             ser.clearline{}

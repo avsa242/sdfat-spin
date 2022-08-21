@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     time: "time"
     sd  : "memfs.sdfat"
 
@@ -51,7 +51,7 @@ PUB Main | err, fn, pos, act_read, cmd
     fn := @"TEST0004.TXT"
     err := \sd.fopen(fn, sd#O_RDONLY)
     if (err < 0)
-        perr(@"FOpen(): ", err)
+        perror(@"FOpen(): ", err)
         repeat
 
     repeat
@@ -62,7 +62,7 @@ PUB Main | err, fn, pos, act_read, cmd
         if (act_read < 1)
             ser.position(0, 4)
             ser.fgcolor(ser#RED)
-            perr(@"Read error: ", act_read)
+            perror(@"Read error: ", act_read)
             ser.fgcolor(ser#GREY)
             ser.charin{}
             ser.position(0, 4)

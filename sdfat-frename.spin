@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
 PUB Main{} | err
@@ -44,7 +44,7 @@ PUB Main{} | err
 
     err := \sd.frename(@"TEST0001.TXT", @"TEST0005.TXT")
     if (err < 0)
-        perr(@"Error renaming: ", err)
+        perror(@"Error renaming: ", err)
         repeat
 
     dir{}

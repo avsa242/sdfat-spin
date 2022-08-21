@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     time: "time"
     sd  : "memfs.sdfat"
 
@@ -55,7 +55,7 @@ PUB Main | err, fn, sect
     fn := @"TEST0004.TXT"
     err := \sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
     if (err < 0)
-        perr(@"FOpen(): ", err)
+        perror(@"FOpen(): ", err)
         repeat
 
     ser.strln(@"updated FAT:")

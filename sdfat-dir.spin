@@ -26,7 +26,7 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
 PUB Main{} | err
@@ -55,7 +55,7 @@ PUB DIR{}: status | dirent, total, endofdir, t_files
         \sd.fcloseent{}
         status := \sd.fopenent(dirent++, sd#O_RDONLY)      ' get current dirent's info
         if (status < 0)
-            perr(@"Error opening: ", status)
+            perror(@"Error opening: ", status)
             repeat
         if (sd.fisvolnm{})
             ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})

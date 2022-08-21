@@ -26,13 +26,13 @@ CON
 OBJ
 
     cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi-new"
+    ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
 DAT
 
     { filename to create must be 8.3 format; pad with spaces if less than full length }
-    _fname byte "TEST0004.TXT", 0
+    _fname byte "TEST0000.TXT", 0
 
 PUB Main{} | err, dirent
 
@@ -49,10 +49,11 @@ PUB Main{} | err, dirent
 
     dirent := \sd.fcreate(@_fname, sd#FATTR_ARC)
     if (dirent < 0)
-        perr(@"Error creating file: ", dirent)
+        perror(@"Error creating file: ", dirent)
         repeat
 
     ser.printf2(@"Created %s in directory entry #%d\n\r", @_fname, dirent)
+    ser.strln(@"done")
 
     repeat
 
