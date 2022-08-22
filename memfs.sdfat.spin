@@ -340,7 +340,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
 '       negative numbers on failure
     ser.strln(@"FDelete()")
     { verify file exists }
-    ser.printf1(@"\tabout to look for %s\n\r", fn_str)
+    ser.printf1(@"    about to look for %s\n\r", fn_str)
     dirent := find(fn_str)
     if (dirent < 0)
         return ENOTFOUND
@@ -395,7 +395,7 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
     { get filename and extension, and convert to uppercase }
     bytemove(@name_tmp, str.toupper(str.left(ptr_str, 8)), 9)
     bytemove(@ext_tmp, str.toupper(str.right(ptr_str, 3)), 4)
-    ser.printf2(@"\tLooking for %s.%s\n\r", @name_tmp, @ext_tmp)
+    ser.printf2(@"    Looking for %s.%s\n\r", @name_tmp, @ext_tmp)
     repeat                                      ' check each rootdir sector
         sd.rdblock(@_sect_buff, rootdirsect{}+rds)
         dirent := 0
