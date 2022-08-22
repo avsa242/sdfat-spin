@@ -49,7 +49,7 @@ OBJ
     ser : "com.serial.terminal.ansi"
     time: "time"
 
-PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
+PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
     ser.startrxtx(24, 25, 0, 115200)
     time.msleep(10)
@@ -63,7 +63,7 @@ PUB Startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
         return
     return status
 
-PUB Mount{}: status
+PUB mount{}: status
 ' Mount SD card
 '   Read SD card boot sector and sync filesystem info
 '   Returns:
@@ -94,7 +94,7 @@ PUB Mount{}: status
     if (status < 0)
         return status
 
-PUB AllocClust(cl_nr): status | tmp, fat_sect
+PUB allocclust(cl_nr): status | tmp, fat_sect
 ' Allocate a new cluster
 '   Returns: cluster number allocated
     ser.strln(string("AllocClust():"))
@@ -132,7 +132,7 @@ PUB AllocClust(cl_nr): status | tmp, fat_sect
     ser.strln(string("AllocClust(): [ret]"))
     return cl_nr
 
-PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
+PUB allocclustblock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 ' Allocate a block of contiguous clusters
 '   cl_st_nr: starting cluster number
 '   count: number of clusters to allocate
@@ -178,7 +178,7 @@ PUB AllocClustBlock(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 
     return count
 
-PUB DirentUpdate(dirent_nr): status
+PUB direntupdate(dirent_nr): status
 ' Update a directory entry on disk
 '   dirent_nr: directory entry number
     ser.strln(string("DirentUpdate()"))
@@ -208,7 +208,7 @@ PUB DirentUpdate(dirent_nr): status
         return EWRIO
     ser.strln(@"DirentUpdate(): [ret]")
 
-PUB FAllocate{}: status | flc, cl_free, fat_sect
+PUB fallocate{}: status | flc, cl_free, fat_sect
 ' Allocate a new cluster for the currently opened file
     ser.strln(@"FAllocate():")
     ifnot (_file_nr)
@@ -245,7 +245,7 @@ PUB FAllocate{}: status | flc, cl_free, fat_sect
     status := allocclust(cl_free)
     _fclust_last := status
 
-PUB FCloseEnt{}: status
+PUB fcloseent{}: status
 ' Close the currently opened file
 '   Returns:
 '       0 on success
@@ -260,7 +260,7 @@ PUB FCloseEnt{}: status
     ser.strln(@"FCloseEnt(): [ret]")
     return 0
 
-PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
+PUB fcountclust{}: t_clust | clust_nr, fat_sect, nx_clust, status
 ' Count number of clusters used by currently open file
     ifnot (fnumber{})
         return ENOTOPEN
@@ -287,7 +287,7 @@ PUB FCountClust{}: t_clust | clust_nr, fat_sect, nx_clust, status
     while not (clustiseoc(clust_nr))
     _fclust_tot := t_clust
 
-PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
+PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 ' Create file
 '   fn_str: pointer to string containing filename
 '   attrs: initial file attributes
@@ -332,7 +332,7 @@ PUB FCreate(fn_str, attrs): status | dirent_nr, ffc
 
     return dirent_nr
 
-PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
+PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
 ' Delete a file
 '   fn_str: pointer to string containing filename
 '   Returns:
@@ -376,11 +376,11 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
 
     return dirent
 
-PUB FileSize{}: sz
+PUB filesize{}: sz
 ' Get size of opened file
     return fsize{}
 
-PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
+PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
 ' Find file, by name
 '   Valid values:
 '       ptr_str: pointer to space-padded string containing filename (8.3)
@@ -421,7 +421,7 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
     ser.strln(@"Find(): [ret]")
     return ENOTFOUND
 
-PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
+PUB findfreeclust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
 ' Find a free cluster, starting from cluster #
 '   LIMITATIONS:
 '   * doesn't return to the beginning of the FAT to look before the file's first cluster
@@ -451,7 +451,7 @@ PUB FindFreeClust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
     ser.strln(@"FindFreeClust(): [ret]")
     return ENOSPC
 
-PUB FindFreeDirent{}: dirent_nr | endofdir
+PUB findfreedirent{}: dirent_nr | endofdir
 ' Find free directory entry
 '   Returns: entry number
     ser.strln(@"FindFreeDirent():")
@@ -473,7 +473,7 @@ PUB FindFreeDirent{}: dirent_nr | endofdir
     until endofdir
     fcloseent{}
 
-PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
+PUB findlastclust{}: cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
 '   LIMITATIONS:
 '       * stays on first sector of FAT
@@ -513,7 +513,7 @@ PUB FindLastClust{}: cl_nr | fat_ent, resp, fat_sect
     ser.strln(@"FindLastClust(): [ret]")
     return cl_nr
 
-PUB FOpen(fn_str, mode): status
+PUB fopen(fn_str, mode): status
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
@@ -536,7 +536,7 @@ PUB FOpen(fn_str, mode): status
     status := fopenent(status, mode)
     ser.strln(@"FOpen(): [ret]")
 
-PUB FOpenEnt(file_nr, mode): status
+PUB fopenent(file_nr, mode): status
 ' Open file by dirent # for subsequent operations
 '   Valid values:
 '       file_nr: directory entry number
@@ -579,7 +579,7 @@ PUB FOpenEnt(file_nr, mode): status
     ser.strln(@"FOpenEnt(): [ret]")
     return fnumber{}
 
-PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
+PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 ' Read a block of data from current seek position of opened file into ptr_dest
 '   Valid values:
 '       ptr_dest: pointer to buffer to copy data read
@@ -625,7 +625,7 @@ PUB FRead(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         return EEOF                              ' reached end of file
     ser.strln(@"FRead(): [ret]")
 
-PUB FRename(fn_old, fn_new): status | dirent
+PUB frename(fn_old, fn_new): status | dirent
 ' Rename file
 '   fn_old: existing filename
 '   fn_new: new filename
@@ -647,7 +647,7 @@ PUB FRename(fn_old, fn_new): status | dirent
     direntupdate(dirent)
     fcloseent{}
 
-PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
+PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
 '   Valid values:
 '       pos: 0 to file size-1
@@ -697,13 +697,13 @@ PUB FSeek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     ser.strln(@"FSeek() [ret]")
     return pos
 
-PUB FTell{}: pos
+PUB ftell{}: pos
 ' Get current seek position in currently opened file
     if (fnumber{} < 0)
         return ENOTOPEN                          ' no file open
     return _fseek_pos
 
-PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
+PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
 ' Truncate open file to 0 bytes
     { except for the first one, clear the file's entire cluster chain to 0 }
     clust_nr := ffirstclust{}
@@ -741,7 +741,7 @@ PUB FTrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
     readfat(0)
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 
-PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
+PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 ' Write buffer to card
 '   ptr_buff: address of buffer to write to SD
 '   len: number of bytes to write from buffer
@@ -788,7 +788,7 @@ PUB FWrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     ser.strln(@"FWrite() [ret]")
     direntupdate(fnumber{})
 
-PUB ReadFAT(fat_sect): resp
+PUB readfat(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
 '    ser.strln(@"ReadFAT():")
@@ -797,7 +797,7 @@ PUB ReadFAT(fat_sect): resp
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 '    ser.strln(@"ReadFAT(): [ret]")
 
-PUB WriteFAT(fat_sect): resp
+PUB writefat(fat_sect): resp
 ' Write the FAT from the sector buffer
 '   fat_sect: sector of the FAT to write
 '    ser.strln(@"WriteFAT():")
