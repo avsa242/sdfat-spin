@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Aug 21, 2022
+    Updated Aug 22, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -44,7 +44,7 @@ VAR
 
 OBJ
 
-    sd  : "memory.flash.sd.spi"
+    sd  : "memory.sd-spi"
     str : "string"
     ser : "com.serial.terminal.ansi"
     time: "time"
@@ -340,6 +340,7 @@ PUB FDelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
 '       negative numbers on failure
     ser.strln(@"FDelete()")
     { verify file exists }
+    ser.printf1(@"\tabout to look for %s\n\r", fn_str)
     dirent := find(fn_str)
     if (dirent < 0)
         return ENOTFOUND
@@ -379,7 +380,7 @@ PUB FileSize{}: sz
 ' Get size of opened file
     return fsize{}
 
-PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], ext_uc[2]
+PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
 ' Find file, by name
 '   Valid values:
 '       ptr_str: pointer to space-padded string containing filename (8.3)
@@ -392,8 +393,9 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
     endofdir := false
 
     { get filename and extension, and convert to uppercase }
-    name_uc := str.toupper(str.left(ptr_str, 8))
-    ext_uc := str.toupper(str.right(ptr_str, 3))
+    bytemove(@name_tmp, str.toupper(str.left(ptr_str, 8)), 9)
+    bytemove(@ext_tmp, str.toupper(str.right(ptr_str, 3)), 4)
+    ser.printf2(@"\tLooking for %s.%s\n\r", @name_tmp, @ext_tmp)
     repeat                                      ' check each rootdir sector
         sd.rdblock(@_sect_buff, rootdirsect{}+rds)
         dirent := 0
@@ -407,8 +409,8 @@ PUB Find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp[2], name_uc[3], 
             if (fdeleted{})                     ' ignore deleted files
                 dirent++
                 next
-            if strcomp(fname{}, name_uc) and {
-}           strcomp(fnameext{}, ext_uc)         ' match found for filename; get
+            if (strcomp(fname{}, @name_tmp) and {
+}           strcomp(fnameext{}, @ext_tmp))      ' match found for filename; get
                 fcloseent{}
                 return (dirent+(rds * DIRENTS)) '   number relative to entr. 0
             fcloseent{}
