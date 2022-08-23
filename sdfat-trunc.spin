@@ -5,7 +5,7 @@
     Description: FATfs on SD: truncate file to 0 bytes
     Copyright (c) 2022
     Started Jun 23, 2022
-    Updated Jun 26, 2022
+    Updated Aug 23, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -59,7 +59,7 @@ PUB Main | err, fn, sect
         repeat
 
     ser.strln(@"updated FAT:")
-    sect := sd.fat1start{}
+    sect := sd.fat1_start{}
     sd.rdblock(@_sect_buff, sect)
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 

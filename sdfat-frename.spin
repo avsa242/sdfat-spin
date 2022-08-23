@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRename() example code
     Copyright (c) 2022
     Started Jun 15, 2022
-    Updated Jun 26, 2022
+    Updated Aug 23, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -57,23 +57,24 @@ PUB DIR{} | dirent, total, endofdir, t_files
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        sd.fcloseent{}
-        sd.fopenent(dirent++, sd#O_RDONLY)      ' get current dirent's info
-        if (sd.fisvolnm{})
+        sd.fclose_ent{}
+        sd.fopen_ent(dirent++, sd#O_RDONLY)      ' get current dirent's info
+        if (sd.fis_vol_nm{})
             ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})
             next
-        if (sd.direntneverused{})               ' last directory entry
+        if (sd.dirent_never_used{})             ' last directory entry
             endofdir := true
             quit
         if (sd.fdeleted{})                      ' ignore deleted files
             next
-        if (sd.fisdir{})                        ' format subdirs specially
+        if (sd.fis_dir{})                       ' format subdirs specially
             ser.printf1(string("[%s]\n\r"), sd.fname{})
         else
             { regular files }
-            ser.printf4(string("%s.%s %10.10d %x "), sd.fname{}, sd.fnameext{}, sd.fsize{}, sd.ffirstclust{})
-            printdate(sd.fdatecreated{})
-            printtime(sd.ftimecreated{})
+            ser.printf4(string("%s.%s %10.10d %x "), sd.fname{}, sd.fname_ext{}, sd.fsize{}, {
+}           sd.ffirst_clust{})
+            printdate(sd.fdate_created{})
+            printtime(sd.ftime_created{})
             printattrs(sd.fattrs{})
             ser.newline{}
         total += sd.fsize{}                     ' tally up size of all files
