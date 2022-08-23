@@ -75,7 +75,7 @@ PUB mount{}: status
     init(@_sect_buff)
 
     { read the MBR }
-    status := sd.rdblock(@_sect_buff, MBR)
+    status := sd.rd_block(@_sect_buff, MBR)
     if (status < 0)
         return status
 
@@ -85,7 +85,7 @@ PUB mount{}: status
         return status
 
     { now read that sector }
-    status := sd.rdblock(@_sect_buff, part_start{})
+    status := sd.rd_block(@_sect_buff, part_start{})
     if (status < 0)
         return status
 
@@ -185,8 +185,8 @@ PUB dirent_update(dirent_nr): status
     ser.printf1(@"    called with: %d\n\r", dirent_nr)
 
     { read root dir sect }
-    ser.strln(@"    rdblock")
-    status := sd.rdblock(@_sect_buff, dirent_to_abs_sect(dirent_nr))
+    ser.strln(@"    rd_block")
+    status := sd.rd_block(@_sect_buff, dirent_to_abs_sect(dirent_nr))
     if (status < 0)
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    read error %d\n\r"), status)
@@ -198,8 +198,8 @@ PUB dirent_update(dirent_nr): status
     bytemove(@_sect_buff+dirent_start(dirent_nr), @_dirent, DIRENT_LEN)
 
     { write root dir sect back to disk }
-    ser.strln(@"    wrblock")
-    status := sd.wrblock(@_sect_buff, dirent_to_abs_sect(dirent_nr))
+    ser.strln(@"    wr_block")
+    status := sd.wr_block(@_sect_buff, dirent_to_abs_sect(dirent_nr))
     if (status < 0)
         ser.fgcolor(ser#BRIGHT | ser#RED)
         ser.printf1(string("    write error %d\n\r"), status)
@@ -397,7 +397,7 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
     bytemove(@ext_tmp, str.toupper(str.right(ptr_str, 3)), 4)
     ser.printf2(@"    Looking for %s.%s\n\r", @name_tmp, @ext_tmp)
     repeat                                      ' check each rootdir sector
-        sd.rdblock(@_sect_buff, root_dir_sect{}+rds)
+        sd.rd_block(@_sect_buff, root_dir_sect{}+rds)
         dirent := 0
 
         repeat DIRENTS                          ' check each file in the sector
@@ -548,7 +548,7 @@ PUB fopen_ent(file_nr, mode): status
     if (fnumber{} => 0)
         ser.strln(string("    already open"))
         return EOPEN
-    sd.rdblock(@_sect_buff, (root_dir_sect{} + dirent_to_sect(file_nr)))
+    sd.rd_block(@_sect_buff, (root_dir_sect{} + dirent_to_sect(file_nr)))
     read_dirent(file_nr & $0f)               ' cache dirent metadata
     if (dirent_never_used{})
         ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
@@ -604,7 +604,7 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         ser.printf1(@"(fsize-_fseek_pos): %d\n\r", fsize{}-_fseek_pos)
         { read a block from the SD card into the internal sector buffer,
             and copy as many bytes as possible from it into the user's buffer }
-        resp := sd.rdblock(@_sect_buff, _fseek_sect)
+        resp := sd.rd_block(@_sect_buff, _fseek_sect)
         if (resp < 1)
             return ERDIO
 
@@ -616,7 +616,7 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         if (nr_left > 0)
             { read the next block from the SD card, and copy the remainder
                 of the requested length into the user's buffer }
-            sd.rdblock(@_sect_buff, _fseek_sect)
+            sd.rd_block(@_sect_buff, _fseek_sect)
             bytemove(ptr_dest+nr_read, @_sect_buff, nr_left)
             nr_read += nr_left
         fseek(_fseek_pos + nr_read)             ' update seek pointer
@@ -771,14 +771,14 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
-            resp := sd.rdblock(@_sect_buff, _fseek_sect)
+            resp := sd.rd_block(@_sect_buff, _fseek_sect)
             if (resp < 1)
                 return ERDIO
 
         { copy the next chunk of data to the sector buffer }
         bytemove(@_sect_buff+_sect_offs, ptr_buff+(len-nr_left), sect_wrsz)
 
-        status := sd.wrblock(@_sect_buff, _fseek_sect)
+        status := sd.wr_block(@_sect_buff, _fseek_sect)
         if (status == sd#SECT_SZ)
             if (_fmode & O_APPEND)              ' if appending, update size in dirent cache
                 fset_size(fsize{} + sect_wrsz)
@@ -793,7 +793,7 @@ PUB read_fat(fat_sect): resp
 '   fat_sect: sector of the FAT to read
 '    ser.strln(@"ReadFAT():")
     bytefill(@_sect_buff, 0, 512)
-    resp := sd.rdblock(@_sect_buff, (fat1_start{} + fat_sect))
+    resp := sd.rd_block(@_sect_buff, (fat1_start{} + fat_sect))
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 '    ser.strln(@"ReadFAT(): [ret]")
 
@@ -802,20 +802,20 @@ PUB write_fat(fat_sect): resp
 '   fat_sect: sector of the FAT to write
 '    ser.strln(@"WriteFAT():")
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-    resp := sd.wrblock(@_sect_buff, (fat1_start{} + fat_sect))
+    resp := sd.wr_block(@_sect_buff, (fat1_start{} + fat_sect))
 '    ser.strln(@"WriteFAT(): [ret]")
 
 #include "filesystem.block.fat.spin"
 
 ' below: temporary, for devel purposes
 
-pub rdblock(ptr, sect)
+pub rd_block(ptr, sect)
 
-    return sd.rdblock(ptr, sect)
+    return sd.rd_block(ptr, sect)
 
-pub wrblock(ptr, sect): resp
+pub wr_block(ptr, sect): resp
 
-    return sd.wrblock(ptr, sect)
+    return sd.wr_block(ptr, sect)
 
 pub getsbp
 
