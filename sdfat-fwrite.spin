@@ -5,7 +5,7 @@
     Description: FATfs on SD: FWrite() example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Aug 23, 2022
+    Updated Aug 27, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -47,10 +47,10 @@ PUB Main | err, fn, pos, cmd
 
     err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n"), err)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n"), err)
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
 
     fn := @"TESTFIL3.TXT"
     err := \sd.fopen(fn, sd#O_RDWR)
