@@ -10,7 +10,7 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 * FAT32 on SDHC/SDXC
 * Open file by name or dirent number
 * Read currently opened file's attributes: file name and extension, is directory, is the volume name, size, date, time
-* Read, write a block of data
+* Read, write a block of data (writes are currently _always_ synchronous)
 * File management: rename, delete, create, find by filename
 * Cluster management: Find free cluster, allocate an arbitrary cluster, allocate block of clusters, allocate additional cluster for currently open file, count clusters allocated to file
 * POSIX-ish familiarities: (some) method names and params, file open modes
@@ -32,6 +32,8 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 
 P1/SPIN1:
 * spin-standard-library
+* [fatfs-spin](https://github.com/avsa242/fatfs-spin)
+* [sdmem-spin](https://github.com/avsa242/sdmem-spin)
 
 ~~P2/SPIN2:~~
 * ~~p2-spin-standard-library~~
@@ -40,11 +42,11 @@ P1/SPIN1:
 
 | Processor | Language | Compiler               | Backend     | Status                |
 |-----------|----------|------------------------|-------------|-----------------------|
-| P1        | SPIN1    | FlexSpin (5.9.10-beta) | Bytecode    | OK                    |
-| P1        | SPIN1    | FlexSpin (5.9.10-beta) | Native code | OK                    |
+| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Bytecode    | OK                    |
+| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Native code | OK                    |
 | P1        | SPIN1    | OpenSpin (1.00.81)     | Bytecode    | Untested (deprecated) |
-| P2        | SPIN2    | FlexSpin (5.9.10-beta) | NuCode      | Untested              |
-| P2        | SPIN2    | FlexSpin (5.9.10-beta) | Native code | Not yet implemented   |
+| P2        | SPIN2    | FlexSpin (5.9.14-beta) | NuCode      | Untested              |
+| P2        | SPIN2    | FlexSpin (5.9.14-beta) | Native code | Not yet implemented   |
 | P1        | SPIN1    | Brad's Spin Tool (any) | Bytecode    | Unsupported           |
 | P1, P2    | SPIN1, 2 | Propeller Tool (any)   | Bytecode    | Unsupported           |
 | P1, P2    | SPIN1, 2 | PNut (any)             | Bytecode    | Unsupported           |
