@@ -12,15 +12,15 @@
 
 CON
 
-    _clkmode        = cfg#_clkmode
-    _xinfreq        = cfg#_xinfreq
+    _clkmode    = cfg#_clkmode
+    _xinfreq    = cfg#_xinfreq
 
 ' --
-{ SPI configuration }
-    CS              = 3
-    SCK             = 1
-    MOSI            = 2
-    MISO            = 0
+    { SPI configuration }
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 ' --
 
 OBJ
@@ -29,46 +29,35 @@ OBJ
     ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
-PUB Main{} | err
+PUB main{}
 
-    ser.start(115_200)
-    ser.clear
-    ser.strln(@"serial terminal started")
-
-    err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
-    if (err < 1)
-        ser.printf1(@"Error mounting SD card %x\n\r", err)
-        repeat
-    else
-        ser.printf1(@"Mounted card (%d)\n\r", err)
-
+    setup{}
     dir{}
     repeat
 
-PUB DIR{}: status | dirent, total, endofdir, t_files
+PUB dir{}: status | dirent, total, endofdir, t_files
 ' Display directory listing
     dirent := 0
     total := 0
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        \sd.fclose_ent{}
-        status := \sd.fopen_ent(dirent++, sd#O_RDONLY)      ' get current dirent's info
+        sd.fclose_ent{}
+        status := sd.fopen_ent(dirent++, sd#O_RDONLY)   ' get current dirent's info
         if (status < 0)
             perror(@"Error opening: ", status)
             repeat
         if (sd.fis_vol_nm{})
             ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})
             next
-        if (sd.dirent_never_used{})               ' last directory entry
+        if (sd.dirent_never_used{})             ' last directory entry
             endofdir := true
             quit
         if (sd.fdeleted{})                      ' ignore deleted files
             next
-        if (sd.fis_dir{})                        ' format subdirs specially
+        if (sd.fis_dir{})                       ' format subdirs specially
             ser.printf1(string("[%s]\n\r"), sd.fname{})
-        else
-            { regular files }
+        else                                    ' regular files
             ser.printf4(string("%s.%s %10.10d %x "), sd.fname{}, sd.fname_ext{}, sd.fsize{}, {
 }           sd.ffirst_clust{})
             printdate(sd.fdate_created{})
@@ -79,6 +68,19 @@ PUB DIR{}: status | dirent, total, endofdir, t_files
         t_files++
     until endofdir
     ser.printf2(string("\n\r\n\r%d Files, total: %d bytes\n\r"), t_files, total)
+
+PUB setup{} | err
+
+    ser.start(115_200)
+    ser.clear
+    ser.strln(@"serial terminal started")
+
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
+    if (err < 1)
+        ser.printf1(@"Error mounting SD card %x\n\r", err)
+        repeat
+    else
+        ser.printf1(@"Mounted card (%d)\n\r", err)
 
 #include "fatfs-common.spinh"
 #include "sderr.spinh"

@@ -16,11 +16,11 @@ CON
     _xinfreq        = cfg#_xinfreq
 
 ' --
-{ SPI configuration }
-    CS              = 3
-    SCK             = 1
-    MOSI            = 2
-    MISO            = 0
+    { SPI configuration }
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 ' --
 
 OBJ
@@ -38,32 +38,36 @@ DAT
 
     _test_str byte "this is the test data", 0
 
-PUB Main | err, fn, sect
+PUB main{} | err, fn, sect
+
+    setup{}
+
+    fn := string("TEST0004.TXT")
+    err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
+    if (err < 0)
+        perror(string("fopen(): "), err)
+        repeat
+
+    ser.strln(string("updated FAT:"))
+    sect := sd.fat1_start{}
+    sd.rd_block(@_sect_buff, sect)
+    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
+
+    repeat
+
+PUB setup{} | err
 
     ser.start(115_200)
     time.msleep(30)
     ser.clear
     ser.strln(string("serial terminal started"))
 
-    err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
         ser.printf1(string("Error mounting SD card %x\n\r"), err)
         repeat
     else
         ser.printf1(string("Mounted card (%d)\n\r"), err)
-
-    fn := @"TEST0004.TXT"
-    err := \sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
-    if (err < 0)
-        perror(@"FOpen(): ", err)
-        repeat
-
-    ser.strln(@"updated FAT:")
-    sect := sd.fat1_start{}
-    sd.rdblock(@_sect_buff, sect)
-    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
-
-    repeat
 
 #include "sderr.spinh"
 

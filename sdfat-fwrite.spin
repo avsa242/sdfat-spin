@@ -12,15 +12,15 @@
 
 CON
 
-    _clkmode        = cfg#_clkmode
-    _xinfreq        = cfg#_xinfreq
+    _clkmode    = cfg#_clkmode
+    _xinfreq    = cfg#_xinfreq
 
 ' --
-{ SPI configuration }
-    CS              = 3
-    SCK             = 1
-    MOSI            = 2
-    MISO            = 0
+    { SPI configuration }
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 ' --
 
 OBJ
@@ -38,52 +38,40 @@ DAT
 
     _test_str byte "this is the test data", 0
 
-PUB Main | err, fn, pos, cmd
+PUB main{} | err, fn, pos, cmd
 
-    ser.start(115_200)
-    time.msleep(30)
-    ser.clear
-    ser.strln(string("serial terminal started"))
+    setup{}
 
-    err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
-    if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
-        repeat
-    else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
-
-    fn := @"TESTFIL3.TXT"
-    err := \sd.fopen(fn, sd#O_RDWR)
+    fn := string("TESTFIL3.TXT")
+    err := sd.fopen(fn, sd#O_RDWR)
     if (err < 0)
-        perror(@"FOpen(): ", err)
+        perror(string("fopen(): "), err)
         repeat
 
     { write test string to file }
     sd.fseek(0)
-    clearbuff{}
     bytemove(@_sect_buff, @_test_str, strsize(@_test_str))
-    err := \sd.fwrite(@_sect_buff, strsize(@_test_str))
+    err := sd.fwrite(@_sect_buff, strsize(@_test_str))
     if (err < 0)
-        perror(@"fwrite(): ", err)
+        perror(string("fwrite(): "), err)
         repeat
 
-    clearbuff{}
     sd.fseek(0)
     repeat
         ser.clear{}
         bytefill(@_sect_buff, 0, 512)
         pos := sd.ftell{}                       ' get current seek position
-        err := \sd.fread(@_sect_buff, 512)       ' reading advances the seek pointer by the number
+        err := sd.fread(@_sect_buff, 512)       ' reading advances the seek pointer by the number
                                                 '   of bytes actually read
         if (err < 1)
             ser.position(0, 0)
-            perror(@"Read error: ", err)
+            perror(string("Read error: "), err)
             ser.charin{}
             ser.position(0, 0)
             ser.clearline{}
 
         ser.position(0, 0)
-        ser.printf1(@"fseek(): %d", pos)
+        ser.printf1(string("fseek(): %d"), pos)
         ser.clearline{}
         ser.newline{}
 
@@ -104,13 +92,23 @@ PUB Main | err, fn, pos, cmd
                 pos := sd.fsize{}-512
                 sd.fseek(pos)
             "p":
-                ser.printf1(@"Enter seek position: (0..%d)> ", sd.fend{})
-                pos := ser.decin
+                ser.printf1(string("Enter seek position: (0..%d)> "), sd.fend{})
+                pos := ser.decin{}
                 sd.fseek(pos)
 
-PUB ClearBuff{}
-' Clear sector buffer
-    bytefill(@_sect_buff, 0, 512)
+PUB setup{} | err
+
+    ser.start(115_200)
+    time.msleep(30)
+    ser.clear
+    ser.strln(string("serial terminal started"))
+
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
+    if (err < 1)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        repeat
+    else
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
 
 #include "sderr.spinh"
 

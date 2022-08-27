@@ -5,22 +5,22 @@
     Description: FATfs on SD: directory listing example code
     Copyright (c) 2022
     Started Jun 11, 2022
-    Updated Jun 26, 2022
+    Updated Aug 27, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
 
 CON
 
-    _clkmode        = cfg#_clkmode
-    _xinfreq        = cfg#_xinfreq
+    _clkmode    = cfg#_clkmode
+    _xinfreq    = cfg#_xinfreq
 
 ' --
-{ SPI configuration }
-    CS              = 3
-    SCK             = 1
-    MOSI            = 2
-    MISO            = 0
+    { SPI configuration }
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 ' --
 
 OBJ
@@ -34,28 +34,32 @@ DAT
     { filename to create must be 8.3 format; pad with spaces if less than full length }
     _fname byte "TEST0000.TXT", 0
 
-PUB Main{} | err, dirent
+PUB main{} | err, dirent
+
+    setup{}
+
+    dirent := sd.fcreate(@_fname, sd#FATTR_ARC)
+    if (dirent < 0)
+        perror(string("Error creating file: "), dirent)
+        repeat
+
+    ser.printf2(string("Created %s in directory entry #%d\n\r"), @_fname, dirent)
+    ser.strln(string("done"))
+
+    repeat
+
+PUB setup{} | err
 
     ser.start(115_200)
-    ser.clear{}
+    ser.clear
     ser.strln(string("serial terminal started"))
 
-    err := sd.startx(CS, SCK, MOSI, MISO)
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
         ser.printf1(string("Error mounting SD card %x\n\r"), err)
         repeat
     else
         ser.printf1(string("Mounted card (%d)\n\r"), err)
-
-    dirent := \sd.fcreate(@_fname, sd#FATTR_ARC)
-    if (dirent < 0)
-        perror(@"Error creating file: ", dirent)
-        repeat
-
-    ser.printf2(@"Created %s in directory entry #%d\n\r", @_fname, dirent)
-    ser.strln(@"done")
-
-    repeat
 
 #include "sderr.spinh"
 

@@ -5,22 +5,22 @@
     Description: FATfs on SD: FRename() example code
     Copyright (c) 2022
     Started Jun 15, 2022
-    Updated Aug 23, 2022
+    Updated Aug 27, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
 
 CON
 
-    _clkmode        = cfg#_clkmode
-    _xinfreq        = cfg#_xinfreq
+    _clkmode    = cfg#_clkmode
+    _xinfreq    = cfg#_xinfreq
 
 ' --
-{ SPI configuration }
-    CS              = 3
-    SCK             = 1
-    MOSI            = 2
-    MISO            = 0
+    { SPI configuration }
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 ' --
 
 OBJ
@@ -29,28 +29,19 @@ OBJ
     ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
-PUB Main{} | err
+PUB main{} | err
 
-    ser.start(115_200)
-    ser.clear
-    ser.strln(@"serial terminal started")
+    setup{}
 
-    err := sd.startx(CS, SCK, MOSI, MISO)              ' start SD/FAT
-    if (err < 1)
-        ser.printf1(@"Error mounting SD card %x\n\r", err)
-        repeat
-    else
-        ser.printf1(@"Mounted card (%d)\n\r", err)
-
-    err := \sd.frename(@"TEST0001.TXT", @"TEST0005.TXT")
+    err := sd.frename(string("TEST0001.TXT"), string("TEST0005.TXT"))
     if (err < 0)
-        perror(@"Error renaming: ", err)
+        perror(string("Error renaming: "), err)
         repeat
 
     dir{}
     repeat
 
-PUB DIR{} | dirent, total, endofdir, t_files
+PUB dir{} | dirent, total, endofdir, t_files
 ' Display directory listing
     dirent := 0
     total := 0
@@ -58,9 +49,9 @@ PUB DIR{} | dirent, total, endofdir, t_files
     t_files := 0
     repeat                                      ' up to 16 entries per sector
         sd.fclose_ent{}
-        sd.fopen_ent(dirent++, sd#O_RDONLY)      ' get current dirent's info
+        sd.fopen_ent(dirent++, sd#O_RDONLY)     ' get current dirent's info
         if (sd.fis_vol_nm{})
-            ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})
+            ser.printf1(string("Volume name: '%s'\n\r\n\r"), sd.fname{})
             next
         if (sd.dirent_never_used{})             ' last directory entry
             endofdir := true
@@ -81,6 +72,19 @@ PUB DIR{} | dirent, total, endofdir, t_files
         t_files++
     until endofdir
     ser.printf2(string("\n\r\n\r%d Files, total: %d bytes\n\r"), t_files, total)
+
+PUB setup{} | err
+
+    ser.start(115_200)
+    ser.clear
+    ser.strln(string("serial terminal started"))
+
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
+    if (err < 1)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        repeat
+    else
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
 
 #include "fatfs-common.spinh"
 #include "sderr.spinh"

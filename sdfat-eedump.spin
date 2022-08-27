@@ -5,7 +5,7 @@
     Description: FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
     Copyright (c) 2022
     Started Aug 25, 2022
-    Updated Aug 25, 2022
+    Updated Aug 27, 2022
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -17,10 +17,10 @@ CON
 
 ' --
     { SPI configuration }
-    CS          = 3
-    SCK         = 1
-    MOSI        = 2
-    MISO        = 0
+    CS_PIN      = 3
+    SCK_PIN     = 1
+    MOSI_PIN    = 2
+    MISO_PIN    = 0
 
     { I2C configuration }
     I2C_SCL     = 28
@@ -46,39 +46,24 @@ VAR
 
     byte _ee_page[512]
 
-PUB Main | err, dirent, ee_addr, ee_subpg
+PUB main{} | err, dirent, ee_addr, ee_subpg
 
-    ser.start(115_200)
-    time.msleep(10)
-    ser.clear{}
-    ser.strln(string("serial terminal started"))
+    setup{}
 
-    err := sd.startx(CS, SCK, MOSI, MISO)
-    if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
-        repeat
-    else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
-
-    if ((\sd.find(@_fname)) == sd#ENOTFOUND)
+    if ((sd.find(@_fname)) == sd#ENOTFOUND)
         ser.str(string("EE dump file doesn't exist; creating..."))
-        err := \sd.fcreate(@_fname, sd#FATTR_ARC)
-'        if (err < 0)
-'           perror(string("Error creating file: ", err)
-        \sd.fclose
+        err := sd.fcreate(@_fname, sd#FATTR_ARC)
+        if (err < 0)
+            perror(string("Error creating file: "), err)
+            repeat
+        sd.fclose{}
         ser.strln(string("done"))
-    err := \sd.fopen(@_fname, sd#O_WRITE | sd#O_APPEND)
+    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_APPEND)
     if (err < 0)
         perror(string("Error opening:"), err)
         repeat
 
     ser.printf1(string("Opened %s\n\r"), @_fname)
-
-    if (ee.startx(I2C_SCL, I2C_SDA, I2C_FREQ, ADDR_BITS))
-        ser.strln(string("EEPROM driver started"))
-    else
-        ser.strln(string("EEPROM driver failed to start - halting"))
-        repeat
 
     ser.strln(string("dumping EEPROM to file..."))
     repeat ee_addr from 0 to 65024 step 512
@@ -90,9 +75,29 @@ PUB Main | err, dirent, ee_addr, ee_subpg
         sd.fwrite(@_ee_page, 512)
 
     ser.str(string("closing file..."))
-    \sd.fclose{}
+    sd.fclose{}
     ser.strln(string("done"))
     repeat
+
+PUB setup{} | err
+
+    ser.start(115_200)
+    time.msleep(10)
+    ser.clear{}
+    ser.strln(string("serial terminal started"))
+
+    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
+    if (err < 1)
+        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        repeat
+    else
+        ser.printf1(string("Mounted card (%d)\n\r"), err)
+
+    if (ee.startx(I2C_SCL, I2C_SDA, I2C_FREQ, ADDR_BITS))
+        ser.strln(string("EEPROM driver started"))
+    else
+        ser.strln(string("EEPROM driver failed to start - halting"))
+        repeat
 
 #include "sderr.spinh"
 
