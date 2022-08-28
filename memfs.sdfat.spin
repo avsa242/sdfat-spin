@@ -778,7 +778,6 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
         ser.printf1(string("    _sect_offs = %d\n\r"), _sect_offs)
         ser.printf1(string("    sect_wrsz = %d\n\r"), sect_wrsz)
-        bytefill(@_sect_buff, 0, sect_sz{})     ' XXX remove? shouldn't be necessary; it's always filled
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
@@ -803,7 +802,6 @@ PUB read_fat(fat_sect): resp
 ' Read the FAT into the sector buffer
 '   fat_sect: sector of the FAT to read
 '    ser.strln(string("read_fat():")
-    bytefill(@_meta_buff, 0, 512)               ' XXX remove? shouldn't be necessary; it's always filled
     resp := sd.rd_block(@_meta_buff, (fat1_start{} + fat_sect))
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 '    ser.strln(string("read_fat(): [ret]")

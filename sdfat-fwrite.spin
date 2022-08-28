@@ -36,7 +36,8 @@ VAR
 
 DAT
 
-    _test_str byte "this is the test data", 0
+
+    _test_str byte "AAAAAAAAAAAAAAAAAAAAA", 0
 
 PUB main{} | err, fn, pos, cmd
 
