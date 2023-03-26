@@ -9,33 +9,7 @@
     See end of file for terms of use.
     --------------------------------------------
 }
-#ifdef DEBUG
-#define dprintf1 ser.printf1
-#define dprintf2 ser.printf2
-#define dstrln ser.strln
-#define dstr ser.str
-#define dprintf1_err Dprintf1_err
-#define dprintf1_info Dprintf1_info
-#define dstrln_info Dstrln_info
-#define dstrln_err Dstrln_err
-#define dstrln_warn Dstrln_warn
-#define dnewline ser.newline
-#define dhexdump ser.hexdump
-#else
-#define dprintf1 '
-#define dprintf2 '
-#define dprintf1_err '
-#define dprintf1_info '
-#define dstrln '
-#define dstr '
-#define dstrln_info '
-#define dstrln_err '
-#define dstrln_warn '
-#define dnewline '
-#define dhexdump '
-#endif
-
-
+#include "debug.spinh"
 CON
 
 ' Error codes
@@ -76,46 +50,10 @@ OBJ
     ser : "com.serial.terminal.ansi"
     time: "time"
 
-PRI Dstrln_info(ptr_msg)
-
-    ser.fgcolor(ser.GREEN)
-    ser.strln(ptr_msg)
-    ser.fgcolor(ser.GREY)
-
-PRI Dstrln_warn(ptr_msg)
-
-    ser.fgcolor(ser.YELLOW)
-    ser.strln(ptr_msg)
-    ser.fgcolor(ser.GREY)
-
-PRI Dstrln_err(ptr_msg)
-
-    ser.fgcolor(ser.RED | ser.BRIGHT)
-    ser.strln(ptr_msg)
-    ser.fgcolor(ser.GREY)
-
-PRI Dprintf1_info(ptr_msg, p1)
-
-    ser.fgcolor(ser.GREEN)
-    ser.printf1(ptr_msg, p1)
-    ser.fgcolor(ser.GREY)
-
-PRI Dprintf1_warn(ptr_msg, p1)
-
-    ser.fgcolor(ser.YELLOW)
-    ser.printf1(ptr_msg, p1)
-    ser.fgcolor(ser.GREY)
-
-PRI Dprintf1_err(ptr_msg, p1)
-
-    ser.fgcolor(ser.RED | ser.BRIGHT)
-    ser.printf1(ptr_msg, p1)
-    ser.fgcolor(ser.GREY)
-
 PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
 '#ifdef DEBUG
-    ser.startrxtx(24, 25, 0, 115200)
+    ser.startrxtx(DBG_RX, DBG_TX, 0, DBG_BAUD)
     time.msleep(10)
     ser.clear
 '#endif
@@ -655,6 +593,8 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
             resp := sd.rd_block(@_sect_buff, _fseek_sect)
             if (resp < 1)
                 return ERDIO
+        else
+            dstrln_info(@"current seek sector == prev seek sector; not re-reading")
 
         { copy as many bytes as possible from it into the user's buffer }
         movbytes := sect_sz{}-_sect_offs
