@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated Mar 26, 2023
+    Updated May 3, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -208,7 +208,7 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     dprintf1(@"    last cluster: %x\n\r", flc)
 
     { find a free cluster }
-    cl_free := find_free_clust(flc)
+    cl_free := find_free_clust()
     if (cl_free < 0)
         dprintf1_err(@"    error %d\n\r", status)
         return cl_free
@@ -287,7 +287,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
     dprintf1(@"    fmode = %x\n\r", _fmode)
 
     { find a free cluster, starting at the beginning of the FAT }
-    ffc := find_free_clust(3)
+    ffc := find_free_clust()
     dprintf1("    first free cluster: %x\n\r", ffc)
     if (ffc < 3)
         return ENOSPC
@@ -405,33 +405,24 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
     dstrln(@"find(): [ret]")
     return ENOTFOUND
 
-PUB find_free_clust(st_from): avail | sect_offs, fat_ent, fat_sect, resp
-' Find a free cluster, starting from cluster #
-'   LIMITATIONS:
-'   * doesn't return to the beginning of the FAT to look before the file's first cluster
-    dstrln(@"find_free_clust():")
-    avail := 0
+CON FREE_CLUST = 0
+PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
+' Find a free cluster
+    fat_sector := fat1_start()                  ' start at first sector of first FAT
+    fat_sect_entry := 3                         ' skip reserved, root dir, and vol label entries
 
-    { read FAT }
-    fat_ent := st_from
-    fat_sect := clust_num_to_fat_sect(st_from)
-    dprintf1(@"    fat_ent = %d\n\r", fat_ent)
-    if (avail := read_fat(fat_sect) <> 512)
-        dprintf1_err(@"    read error %d\n\r", avail)
-        return ERDIO
+    repeat                                      ' for each FAT sector...
+        repeat                                  '   for each FAT entry...
+            { get absolute FAT entry }
+            fat_entry := ( (fat_sector * 128) + fat_sect_entry )
+            if ( clust_rd(fat_entry) == FREE_CLUST )
+                return fat_entry                ' return the absolute FAT entry #
+            fat_sect_entry++                    ' otherwise, continue on
+        while ( fat_sect_entry < 128 )
+        fat_sector++
+    while ( fat_sector < (fat1_start() + sects_per_fat()) )
 
-    { starting with the cluster # called for, look for an unused one }
-    sect_offs := clust_num_to_offs(st_from)
-    repeat while (sect_offs < 508)
-        bytemove(@fat_ent, (@_meta_buff + sect_offs), 4)
-        if (fat_ent == 0)                       ' found a free one
-            dprintf1(@"    found free clust: %x\n\r", sect_offs_to_abs_clust(sect_offs, fat_sect))
-            return sect_offs_to_abs_clust(sect_offs, fat_sect)
-        sect_offs += 4                          ' none yet; next FAT entry
-
-    { if this point is reached, no free clusters were found }
-    dstrln(@"find_free_clust(): [ret]")
-    return ENOSPC
+    return ENOSPC                               ' no free clusters
 
 PUB find_free_dirent{}: dirent_nr | endofdir
 ' Find free directory entry
