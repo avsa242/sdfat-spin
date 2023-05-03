@@ -474,6 +474,9 @@ PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
     repeat
         cl_nr := fat_ent
         fat_ent := clust_rd(fat_ent)
+        if ( fat_ent == 0 )
+            dstrln(@"    error: invalid FAT entry 0")
+            quit    ' abort EFSCORRUPT?
         dprintf1(@"    cl_nr: %x\n\r", cl_nr)
         dprintf1(@"    fat_ent: %x\n\r", fat_ent)
     while not (clust_is_eoc(fat_ent))
