@@ -3,9 +3,9 @@
     Filename: sdfat-dir.spin
     Author: Jesse Burt
     Description: FATfs on SD: directory listing example code
-    Copyright (c) 2022
+    Copyright (c) 2023
     Started Jun 11, 2022
-    Updated Aug 23, 2022
+    Updated May 3, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -25,9 +25,10 @@ CON
 
 OBJ
 
-    cfg : "boardcfg.flip"
-    ser : "com.serial.terminal.ansi"
-    sd  : "memfs.sdfat"
+    cfg:    "boardcfg.flip"
+    ser:    "com.serial.terminal.ansi"
+    sd:     "memfs.sdfat"
+    time:   "time"
 
 PUB main{}
 
@@ -72,6 +73,7 @@ PUB dir{}: status | dirent, total, endofdir, t_files
 PUB setup{} | err
 
     ser.start(115_200)
+    time.msleep(20)
     ser.clear
     ser.strln(@"serial terminal started")
 
@@ -87,7 +89,7 @@ PUB setup{} | err
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2023 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

@@ -3,9 +3,9 @@
     Filename: sdfat-eedump.spin
     Author: Jesse Burt
     Description: FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
-    Copyright (c) 2022
+    Copyright (c) 2023
     Started Aug 25, 2022
-    Updated Aug 27, 2022
+    Updated May 3, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -31,11 +31,11 @@ CON
 
 OBJ
 
-    cfg : "core.con.boardcfg.flip"
-    ser : "com.serial.terminal.ansi"
-    sd  : "memfs.sdfat"
-    time: "time"
-    ee  : "memory.eeprom.24xxxx"
+    cfg:    "boardcfg.flip"
+    ser:    "com.serial.terminal.ansi"
+    sd:     "memfs.sdfat"
+    time:   "time"
+    ee:     "memory.eeprom.24xxxx"
 
 DAT
 
@@ -82,7 +82,7 @@ PUB main{} | err, dirent, ee_addr, ee_subpg
 PUB setup{} | err
 
     ser.start(115_200)
-    time.msleep(10)
+    time.msleep(20)
     ser.clear{}
     ser.strln(string("serial terminal started"))
 
@@ -103,7 +103,7 @@ PUB setup{} | err
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2023 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
