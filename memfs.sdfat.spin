@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 3, 2023
+    Updated May 8, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -106,7 +106,7 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
 
     { read FAT sector }
     fat_sect := clust_num_to_fat_sect(cl_nr)
-    if (status := read_fat(fat_sect) <> 512)
+    if ( (status := read_fat(fat_sect)) <> 512 )
         dprintf1_err(@"    read error %d\n\r", status)
         return ERDIO
 
@@ -408,6 +408,7 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
 CON FREE_CLUST = 0
 PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
 ' Find a free cluster
+    dstrln(@"find_free_clust():")
     fat_sector := fat1_start()                  ' start at first sector of first FAT
     fat_sect_entry := 3                         ' skip reserved, root dir, and vol label entries
 
@@ -420,8 +421,10 @@ PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
             fat_sect_entry++                    ' otherwise, continue on
         while ( fat_sect_entry < 128 )
         fat_sector++
+        dprintf1(@"    next sector (%08x)\n\r", fat_sector)
     while ( fat_sector < (fat1_start() + sects_per_fat()) )
 
+    dstrln(@"find_free_clust() [ret]")
     return ENOSPC                               ' no free clusters
 
 PUB find_free_dirent{}: dirent_nr | endofdir
@@ -777,6 +780,7 @@ PUB read_fat(fat_sect): resp
 '   fat_sect: sector of the FAT to read
     dstrln(@"read_fat():")
     resp := sd.rd_block(@_meta_buff, (fat1_start{} + fat_sect))
+    dprintf1(@"    resp = %d\n\r", resp)
 '    ser.hexdump(@_sect_buff, 0, 4, 512, 16)
     dstrln(@"read_fat(): [ret]")
 
