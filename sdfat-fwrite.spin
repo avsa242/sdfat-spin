@@ -43,7 +43,7 @@ PUB main{} | err, fn, pos, cmd
 
     setup{}
 
-    fn := string("TESTFIL3.TXT")
+    fn := string("TEST0000.TXT")
     err := sd.fopen(fn, sd#O_RDWR)
     if (err < 0)
         perror(string("fopen(): "), err)

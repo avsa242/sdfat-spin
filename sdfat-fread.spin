@@ -38,7 +38,7 @@ PUB main{} | err, fn, pos, act_read, cmd
 
     setup{}
 
-    fn := string("TEST0004.TXT")
+    fn := string("TEST0000.TXT")
     err := sd.fopen(fn, sd#O_RDONLY)
     if (err < 0)
         perror(string("FOpen(): "), err)

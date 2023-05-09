@@ -178,28 +178,28 @@ PUB alloc_clust_block(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 PUB dirent_update(dirent_nr): status
 ' Update a directory entry on disk
 '   dirent_nr: directory entry number
-'    dstrln(@"dirent_update()")
-'    dprintf1(@"    called with: %d\n\r", dirent_nr)
+    dstrln(@"dirent_update()")
+    dprintf1(@"    called with: %d\n\r", dirent_nr)
 
     { read root dir sect }
-'    dstrln(@"    rd_block")
+    dstrln(@"    rd_block")
     status := sd.rd_block(@_meta_buff, dirent_to_abs_sect(dirent_nr))
     if (status < 0)
-'        dprintf1_err(@"    read error %d\n\r", status)
-'        dstrln(@"dirent_update(): [ret]")
+        dprintf1_err(@"    read error %d\n\r", status)
+        dstrln(@"dirent_update(): [ret]")
         return ERDIO
 
     { copy currently cached dirent to sector buffer }
     bytemove(@_meta_buff+dirent_start(dirent_nr), @_dirent, DIRENT_LEN)
 
     { write root dir sect back to disk }
-'    dstrln(@"    wr_block")
+    dstrln(@"    wr_block")
     status := sd.wr_block(@_meta_buff, dirent_to_abs_sect(dirent_nr))
     if (status < 0)
-'        dprintf1_err(@"    write error %d\n\r", status)
-'        dstrln(@"dirent_update(): [ret]")
+        dprintf1_err(@"    write error %d\n\r", status)
+        dstrln(@"dirent_update(): [ret]")
         return EWRIO
-'    dstrln(@"dirent_update(): [ret]")
+    dstrln(@"dirent_update(): [ret]")
 
 PUB fallocate{}: status | flc, cl_free, fat_sect
 ' Allocate a new cluster for the currently opened file
@@ -292,7 +292,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 
     { find a free cluster, starting at the beginning of the FAT }
     ffc := find_free_clust()
-    dprintf1(@"....first free cluster: %x\n\r", ffc)
+    dprintf1(@"    first free cluster: %x\n\r", ffc)
     if ( ffc < 3 )
         return ENOSPC
     dprintf1(@"    fmode = %x\n\r", _fmode)
@@ -415,30 +415,30 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp
 CON FREE_CLUST = 0
 PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
 ' Find a free cluster
-    dstrln(@"find_free_clust():")
+'    dstrln(@"find_free_clust():")
     fat_sector := fat1_start()                  ' start at first sector of first FAT
     fat_sect_entry := 3                         ' skip reserved, root dir, and vol label entries
 
     repeat                                      ' for each FAT sector...
-        dprintf1(@"    reading FAT sector %d\n\r", fat_sector)
+'        dprintf1(@"    reading FAT sector %d\n\r", fat_sector)
         read_fat(fat_sector)
         repeat                                  '   for each FAT entry...
             { get absolute FAT entry }
             { fat sector from the fat_entry's point of view is a relative number, NOT an
                 absolute sector number }
-            dprintf2(@"    fat_sector = %d\tfat1_start() = %d\n\r", fat_sector, fat1_start())
+'            dprintf2(@"    fat_sector = %d\tfat1_start() = %d\n\r", fat_sector, fat1_start())
             fat_entry := ( ((fat_sector-fat1_start()) * 128) + fat_sect_entry )
-            dprintf1(@"    fat_entry = %02.2x\n\r", fat_entry)
+'            dprintf1(@"    fat_entry = %02.2x\n\r", fat_entry)
             if ( clust_rd(fat_entry) == FREE_CLUST )
-                dstrln(@"find_free_clust() [ret]")
+'                dstrln(@"find_free_clust() [ret]")
                 return fat_entry                ' return the absolute FAT entry #
             fat_sect_entry++                    ' otherwise, continue on
         while ( fat_sect_entry < 128 )
         fat_sector++
-        dprintf1(@"    next sector (%08x)\n\r", fat_sector)
+'        dprintf1(@"    next sector (%08x)\n\r", fat_sector)
     while ( fat_sector < (fat1_start() + sects_per_fat()) )
 
-    dstrln(@"find_free_clust() [ret]")
+'    dstrln(@"find_free_clust() [ret]")
     return ENOSPC                               ' no free clusters
 
 PUB find_free_dirent{}: dirent_nr | endofdir
@@ -757,8 +757,12 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     { determine file's max phys. size on disk to see if more space needs to be allocated }
     fcount_clust{}
     if ((ftell{} + len) > (fphys_size{}-1))      ' is req'd size larger than allocated space?
+'        dstrln(@"    current seek+req'd write len will be greater than file's allocated space")
         ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
+'            dstrln(@"    error: bad seek (not opened for appending)")
+'            dstrln(@"fwrite(): [ret]")
             return EBADSEEK
+'        dstrln(@"    OK - opened for appending")
 '        dstrln_info(@"    allocating another cluster")
         fallocate{}                             ' if yes, then allocate another cluster
 
@@ -773,16 +777,22 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
             resp := sd.rd_block(@_sect_buff, _fseek_sect)
+'            dprintf1(@"    read status: %d\n\r", resp)
             if (resp < 1)
+'                dstrln(@"fwrite(): [ret]")
                 return ERDIO
 
         { copy the next chunk of data to the sector buffer }
         bytemove((@_sect_buff+_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
-
+        dhexdump(@_sect_buff, 0, 4, 512, 16)
         status := sd.wr_block(@_sect_buff, _fseek_sect)
-        if (status == sd#SECT_SZ)
-            if (_fmode & O_APPEND)              ' if appending, update size in dirent cache
-                fset_size(fsize{} + sect_wrsz)
+'        dprintf1(@"    write status: %d\n\r", status)
+        if ( status < 0 )
+'            dprintf1(@"    error: %d\n\r", status)
+            return EWRIO
+        if ( status == sd#SECT_SZ )
+'            dprintf2(@"    updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
+            fset_size(fsize{} + sect_wrsz)
             { update position to advance by how much was just written }
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
