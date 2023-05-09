@@ -5,7 +5,7 @@
     Description: FATfs on SD: directory listing example code
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 3, 2023
+    Updated May 9, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -16,6 +16,8 @@ CON
     _xinfreq    = cfg#_xinfreq
 
 ' --
+    SER_BAUD    = 115_200
+
     { SPI configuration }
     CS_PIN      = 3
     SCK_PIN     = 1
@@ -30,52 +32,54 @@ OBJ
     sd:     "memfs.sdfat"
     time:   "time"
 
-PUB main{}
+VAR
 
-    setup{}
-    dir{}
+    byte _fname[8+1+3+1]                        ' file name + "." + extension + NUL
+
+PUB main() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
+
+    setup()
+    sd.opendir(0)
+    ser.printf1(@"Volume label: [%s]\n\r", sd.vol_name())
+    longfill(@err, 0, 7)
+
+    show_del := false                           ' set non-zero to show deleted files
+
+    repeat
+        err := sd.next_file(@_fname)            ' get dirent # and copy filename
+        if ( err > 0 )
+            if ( sd.fdeleted() )                ' how do we handle files marked deleted?
+                del_cnt++                       ' tally them up
+                if ( show_del == false )        ' skip to next if we're not showing them
+                    next
+            else
+                reg_cnt++                       ' regular file
+            if ( sd.fis_dir() )
+                dir_cnt++                       ' directory
+            ser.printf3(@"%s %d %d", @_fname, sd.ffirst_clust(), sd.fsize() )
+            printdate( sd.fdate_created() )
+            printtime( sd.ftime_created() )
+            printattrs( sd.fattrs() )
+            ser.newline()
+            tsz += sd.fsize()                   ' total up the reported size of all files
+            t_files++
+        else
+            ser.newline()
+            ser.strln(@"end of directory")
+    while ( err > 0 )
+
+    ser.newline()
+    ser.printf4(@"Total: %d files (%d directories, %d regular files, %d deleted files)\n\r", ...
+                t_files, dir_cnt, reg_cnt, del_cnt)
+    ser.printf1(@" (%d bytes)\n\r", tsz)
     repeat
 
-PUB dir{}: status | dirent, total, endofdir, t_files
-' Display directory listing
-    dirent := 0
-    total := 0
-    endofdir := false
-    t_files := 0
-    repeat                                      ' up to 16 entries per sector
-        sd.fclose_ent{}
-        status := sd.fopen_ent(dirent++, sd#O_RDONLY)   ' get current dirent's info
-        if (status < 0)
-            perror(@"Error opening: ", status)
-            repeat
-        if (sd.fis_vol_nm{})
-            ser.printf1(@"Volume name: '%s'\n\r\n\r", sd.fname{})
-            next
-        if (sd.dirent_never_used{})             ' last directory entry
-            endofdir := true
-            quit
-        if (sd.fdeleted{})                      ' ignore deleted files
-            next
-        if (sd.fis_dir{})                       ' format subdirs specially
-            ser.printf1(string("[%s]\n\r"), sd.fname{})
-        else                                    ' regular files
-            ser.printf4(string("%s.%s %10.10d %x "), sd.fname{}, sd.fname_ext{}, sd.fsize{}, {
-}           sd.ffirst_clust{})
-            printdate(sd.fdate_created{})
-            printtime(sd.ftime_created{})
-            printattrs(sd.fattrs{})
-            ser.newline{}
-        total += sd.fsize{}                     ' tally up size of all files
-        t_files++
-    until endofdir
-    ser.printf2(string("\n\r\n\r%d Files, total: %d bytes\n\r"), t_files, total)
+PUB setup() | err
 
-PUB setup{} | err
-
-    ser.start(115_200)
+    ser.start(SER_BAUD)
     time.msleep(20)
     ser.clear
-    ser.strln(@"serial terminal started")
+    ser.strln(@"Serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
@@ -84,8 +88,8 @@ PUB setup{} | err
     else
         ser.printf1(@"Mounted card (%d)\n\r", err)
 
-#include "fatfs-common.spinh"
-#include "sderr.spinh"
+#include "fatfs-common.spinh"                   ' common output formatting methods, date/time conv
+#include "sderr.spinh"                          ' error numbers to strings
 
 DAT
 {
