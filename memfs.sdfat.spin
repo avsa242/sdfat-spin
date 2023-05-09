@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 8, 2023
+    Updated May 9, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -774,6 +774,52 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
             nr_left -= sect_wrsz
     dstrln(@"fwrite(): [ret]")
     dirent_update(fnumber{})
+
+var long _dir_sect
+var byte _curr_file
+PUB next_file(ptr_fn): fnr | fch
+' Find next file in directory
+'   ptr_fn: pointer to copy name of next file found to
+'   Returns:
+'       directory entry # (0..15) of file
+'       ENOTFOUND (-2) if there are no more files
+'    dstrln(@"next_file()")
+    fnr := 0
+    if ( ++_curr_file > 15 )                    ' last dirent in sector; go to next sector
+        dstrln(@"    last dirent")
+        if ( ++_dir_sect =< _rootdirend )
+            dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
+            sd.rd_block( @_meta_buff, _dir_sect )
+        else
+            dstrln(@"    last dir sector")
+            --_dir_sect
+            dstrln(@"next_file() [ret]")
+            return ENOTFOUND
+        _curr_file := 0
+
+    fch := byte[@_meta_buff][(_curr_file * DIRENT_LEN)]
+'    dhexdump(@_meta_buff, 0, 4, 512, 16)
+    if ( (fch <> $00) )                         ' reached the end of the directory?
+'        dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
+        read_dirent(_curr_file)
+        bytemove(ptr_fn, @_fname, 8)
+        bytemove(ptr_fn+8, @".", 1)
+        bytemove(ptr_fn+9, @_fext, 3)
+'        dprintf1(@"    (%s)\n\r", ptr_fn)
+'        dstrln(@"next_file() [ret]")
+        return _curr_file
+    else
+'        dprintf1(@"    fn first char is %02.2x\n\r", fch)
+'        dstrln(@"    no more files")
+'        dstrln(@"next_file() [ret]")
+        return ENOTFOUND
+
+pub opendir(ptr_str)
+' Open a directory for subsequent operations
+'   ptr_str: directory name
+'   TODO: find() dirname - currently only re-reads the rootdir
+    sd.rd_block(@_meta_buff, root_dir_sect())
+    read_dirent(0)
 
 PUB read_fat(fat_sect): resp
 ' Read the FAT into the sector buffer
