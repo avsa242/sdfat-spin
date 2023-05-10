@@ -442,28 +442,34 @@ PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
 '    dstrln(@"find_free_clust() [ret]")
     return ENOSPC                               ' no free clusters
 
-PUB find_free_dirent{}: dirent_nr | endofdir
+PUB find_free_dirent{}: dirent_nr | endofdir, d
 ' Find free directory entry
 '   Returns: entry number
     dstrln(@"find_free_dirent():")
+    opendir(0)
+    d := 0
     repeat
-        dirent_nr := 0
+        dirent_nr := d
+        d := next_file(0)
+    while ( d > 0 )
+    return dirent_nr+1
+{
         repeat 16                               ' up to 16 entries per sector
-            fclose_ent{}
+            fclose_ent()
             dprintf1(@"    checking dirent #%d...\n\r", dirent_nr)
             fopen_ent(dirent_nr, O_RDONLY)    ' get current dirent's info
-            { important: skip entries that are subdirs, deleted files, or the volume name,
-                but count them as dirents }
-            if (fis_dir{} or fdeleted{} or fis_vol_nm{})
+            ' important: skip entries that are subdirs, deleted files, or the volume name,
+            '   but count them as dirents
+            if (fis_dir() or fdeleted() or fis_vol_nm())
                 dirent_nr++
                 next
-            if (dirent_never_used{})              ' last directory entry
+            if (dirent_never_used())              ' last directory entry
                 endofdir := true
                 quit
             dirent_nr++
     until endofdir
-    fclose_ent{}
-
+    fclose_ent()
+}
 PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
 '   LIMITATIONS:
@@ -814,35 +820,36 @@ PUB next_file(ptr_fn): fnr | fch
 '   Returns:
 '       directory entry # (0..15) of file
 '       ENOTFOUND (-2) if there are no more files
-'    dstrln(@"next_file()")
+    dstrln(@"next_file()")
     fnr := 0
     if ( ++_curr_file > 15 )                    ' last dirent in sector; go to next sector
-'        dstrln(@"    last dirent")
+        dstrln(@"    last dirent")
         if ( ++_dir_sect =< _rootdirend )
-'            dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
+            dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
             sd.rd_block( @_meta_buff, _dir_sect )
         else
-'            dstrln(@"    last dir sector")
+            dstrln(@"    last dir sector")
             --_dir_sect
-'            dstrln(@"next_file() [ret]")
+            dstrln(@"next_file() [ret]")
             return ENOTFOUND
         _curr_file := 0
 
     fch := byte[@_meta_buff][(_curr_file * DIRENT_LEN)]
-'    dhexdump(@_meta_buff, 0, 4, 512, 16)
+    dhexdump(@_meta_buff, 0, 4, 512, 16)
     if ( (fch <> $00) )                         ' reached the end of the directory?
-'        dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
+        dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
         read_dirent(_curr_file)
-        bytemove(ptr_fn, @_fname, 8)
-        bytemove(ptr_fn+8, @".", 1)
-        bytemove(ptr_fn+9, @_fext, 3)
-'        dprintf1(@"    (%s)\n\r", ptr_fn)
-'        dstrln(@"next_file() [ret]")
-        return _curr_file
+        if ( ptr_fn )
+            bytemove(ptr_fn, @_fname, 8)
+            bytemove(ptr_fn+8, @".", 1)
+            bytemove(ptr_fn+9, @_fext, 3)
+            dprintf1(@"    (%s)\n\r", ptr_fn)
+        dstrln(@"next_file() [ret]")
+        return ( (_dir_sect * 16) + _curr_file )
     else
-'        dprintf1(@"    fn first char is %02.2x\n\r", fch)
-'        dstrln(@"    no more files")
-'        dstrln(@"next_file() [ret]")
+        dprintf1(@"    fn first char is %02.2x\n\r", fch)
+        dstrln(@"    no more files")
+        dstrln(@"next_file() [ret]")
         return ENOTFOUND
 
 pub opendir(ptr_str)
