@@ -792,8 +792,14 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 '            dprintf1(@"    error: %d\n\r", status)
             return EWRIO
         if ( status == sd#SECT_SZ )
-'            dprintf2(@"    updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
-            fset_size(fsize{} + sect_wrsz)
+            { if written portion goes past the EOF, update the size (otherwise we're just
+                overwriting what's already there) }
+'            dprintf1(@"    seek pos is %d\n\r", _fseek_pos)
+'            dprintf1(@"    sect_wrsz is %d\n\r", sect_wrsz)
+'            dprintf1(@"    file end is %d\n\r", fend())
+            if ( (_fseek_pos + sect_wrsz) > fsize() )
+'                dprintf2(@"    updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
+                fset_size(fsize{} + sect_wrsz)
             { update position to advance by how much was just written }
             fseek(_fseek_pos + sect_wrsz)
             nr_left -= sect_wrsz
