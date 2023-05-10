@@ -42,7 +42,7 @@ PUB main{} | err, fn, sect
 
     setup{}
 
-    fn := string("TEST0004.TXT")
+    fn := string("TEST0000.TXT")
     err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
     if (err < 0)
         perror(string("fopen(): "), err)

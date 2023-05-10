@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 9, 2023
+    Updated May 10, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -419,17 +419,18 @@ PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
     fat_sector := fat1_start()                  ' start at first sector of first FAT
     fat_sect_entry := 3                         ' skip reserved, root dir, and vol label entries
 
-    repeat                                      ' for each FAT sector...
+    repeat                                      ' for each FAT sector (relative to 1st)...
 '        dprintf1(@"    reading FAT sector %d\n\r", fat_sector)
-        read_fat(fat_sector)
+        read_fat(fat_sector-fat1_start())
         repeat                                  '   for each FAT entry...
             { get absolute FAT entry }
-            { fat sector from the fat_entry's point of view is a relative number, NOT an
-                absolute sector number }
+            { fat sector from the fat_entry's point of view is relative to the start of the FAT,
+                NOT an absolute sector number }
 '            dprintf2(@"    fat_sector = %d\tfat1_start() = %d\n\r", fat_sector, fat1_start())
             fat_entry := ( ((fat_sector-fat1_start()) * 128) + fat_sect_entry )
 '            dprintf1(@"    fat_entry = %02.2x\n\r", fat_entry)
-            if ( clust_rd(fat_entry) == FREE_CLUST )
+            if ( clust_rd(fat_sect_entry) == FREE_CLUST )
+'                dprintf1(@"    found free entry %02.2x\n\r", fat_entry)
 '                dstrln(@"find_free_clust() [ret]")
                 return fat_entry                ' return the absolute FAT entry #
             fat_sect_entry++                    ' otherwise, continue on
