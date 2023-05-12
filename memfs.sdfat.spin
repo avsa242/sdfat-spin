@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 10, 2023
+    Updated May 12, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -47,7 +47,7 @@ VAR
 DAT
 
     _sys_date word ( (43 << 9) | (5 << 5) | 12 )
-    _sys_time word ( (17 << 11) | (06 << 5) | 00 )
+    _sys_time word ( (18 << 11) | (53 << 5) | 00 )
 
 OBJ
 
@@ -428,23 +428,7 @@ PUB find_free_dirent{}: dirent_nr | endofdir, d
     while ( d > 0 )
 '    dhexdump(@_meta_buff, 0, 4, 512, 16)
     return dirent_nr+1
-{
-        repeat 16                               ' up to 16 entries per sector
-            fclose_ent()
-            dprintf1(@"    checking dirent #%d...\n\r", dirent_nr)
-            fopen_ent(dirent_nr, O_RDONLY)    ' get current dirent's info
-            ' important: skip entries that are subdirs, deleted files, or the volume name,
-            '   but count them as dirents
-            if (fis_dir() or fdeleted() or fis_vol_nm())
-                dirent_nr++
-                next
-            if (dirent_never_used())              ' last directory entry
-                endofdir := true
-                quit
-            dirent_nr++
-    until endofdir
-    fclose_ent()
-}
+
 PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
 '   LIMITATIONS:
@@ -524,17 +508,19 @@ PUB fopen_ent(file_nr, mode): status
 '       or error
     dstrln(@"fopen_ent():")
     if (fnumber{} => 0)
+        dprintf1(@"    file #%d open\n\r", fnumber())
         dstrln_warn(@"    already open")
         return EOPEN
+
     sd.rd_block(@_meta_buff, (root_dir_sect{} + dirent_to_sect(file_nr)))
     read_dirent(file_nr & $0f)               ' cache dirent metadata
     if (dirent_never_used{})
         ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
             dstrln_err(@"    error: dirent unused")
-            fclose_ent{}
+            fclose{}
             dstrln(@"fopen_ent(): [ret]")
             return
-
+    _file_nr := file_nr 'xxx hacky
     dhexdump(@_dirent, 0, 4, 32, 16)
 '    ser.printf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext) 'xxx corruption in debug output?
     dprintf1(@"    opened file/dirent # %d\n\r", fnumber{})
@@ -630,7 +616,7 @@ PUB frename(fn_old, fn_new): status | dirent
     fopen_ent(dirent, O_RDWR)
     fset_fname(fn_new)
     dirent_update(dirent)
-    fclose_ent{}
+    fclose{}
 
 PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
@@ -795,38 +781,38 @@ PUB next_file(ptr_fn): fnr | fch
 '   Returns:
 '       directory entry # (0..15) of file
 '       ENOTFOUND (-2) if there are no more files
-'    dstrln(@"next_file()")
-'    dprintf1(@"    _last_free_dirent = %d\n\r", _last_free_dirent)
+    'dstrln(@"next_file()")
+    'dprintf1(@"    _last_free_dirent = %d\n\r", _last_free_dirent)
     fnr := 0
     if ( ++_curr_file > 15 )                    ' last dirent in sector; go to next sector
-'        dstrln(@"    last dirent")
+        'dstrln(@"    last dirent")
         if ( ++_dir_sect =< _rootdirend )
-'            dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
+            'dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
             sd.rd_block( @_meta_buff, _dir_sect )
-'            dhexdump(@_meta_buff, 0, 4, 512, 16)
+            'dhexdump(@_meta_buff, 0, 4, 512, 16)
         else                                    ' end of root dir
-'            dstrln(@"    last dir sector")
+            'dstrln(@"    last dir sector")
             --_dir_sect                         ' back up
-'            dstrln(@"next_file() [ret]")
+            'dstrln(@"next_file() [ret]")
             return ENOTFOUND
         _curr_file := 0
 
     fch := byte[@_meta_buff][(_curr_file * DIRENT_LEN)]
-'    dhexdump(@_meta_buff, 0, 4, 512, 16)
+    'dhexdump(@_meta_buff, 0, 4, 512, 16)
     if ( (fch <> $00) )                         ' reached the end of the directory?
-'        dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
+        'dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
         read_dirent(_curr_file)
         if ( ptr_fn )
             bytemove(ptr_fn, @_fname, 8)
             bytemove(ptr_fn+8, @".", 1)
             bytemove(ptr_fn+9, @_fext, 3)
-'            dprintf1(@"    (%s)\n\r", ptr_fn)
-'        dstrln(@"next_file() [ret]")
+            'dprintf1(@"    (%s)\n\r", ptr_fn)
+        'dstrln(@"next_file() [ret]")
         return ( ((_dir_sect-root_dir_sect()) * 16) + _curr_file )
     else
-'        dprintf1(@"    fn first char is %02.2x\n\r", fch)
-'        dstrln(@"    no more files")
-'        dstrln(@"next_file() [ret]")
+        'dprintf1(@"    fn first char is %02.2x\n\r", fch)
+        'dstrln(@"    no more files")
+        'dstrln(@"next_file() [ret]")
         _last_free_dirent := ((_dir_sect-root_dir_sect()) * 16) + _curr_file
         return ENOTFOUND
 
