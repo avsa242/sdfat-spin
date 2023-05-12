@@ -46,8 +46,8 @@ VAR
 
 DAT
 
-    _sys_date word ( (43 << 9) | (5 << 5) | 09 )
-    _sys_time word ( (18 << 11) | (02 << 5) | 00 )
+    _sys_date word ( (43 << 9) | (5 << 5) | 12 )
+    _sys_time word ( (17 << 11) | (06 << 5) | 00 )
 
 OBJ
 
@@ -235,21 +235,6 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     { allocate/write EOC in the newly found free cluster }
     status := alloc_clust(cl_free)
     _fclust_last := status
-
-PUB fclose_ent{}: status
-' Close the currently opened file
-'   Returns:
-'       0 on success
-'       ENOTOPEN if a file isn't currently open
-'    dstrln(@"fclose_ent():")
-    if (fnumber{} < 0)
-'        dstrln_err(@"    error: no file open")
-'        dstrln(@"fclose_ent(): [ret]")
-        return ENOTOPEN                          ' file isn't open
-'    dprintf1_info(@"    close number %d OK\n\r", fnumber{})
-    fclose{}
-'    dstrln(@"fclose_ent(): [ret]")
-    return 0
 
 PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nx_clust, status
 ' Count number of clusters used by currently open file
