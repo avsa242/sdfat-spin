@@ -5,7 +5,7 @@
     Description: FATfs on SD: delete file example code
     Copyright (c) 2023
     Started Jun 16, 2022
-    Updated May 3, 2023
+    Updated May 13, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -56,7 +56,7 @@ PUB dir{} | dirent, total, endofdir, t_files
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        sd.fclose_ent{}
+        sd.fclose{}
         sd.fopen_ent(dirent++, sd#O_RDONLY)     ' get current dirent's info
         if (sd.fis_vol_nm{})
             ser.printf1(string("Volume name: '%s'\n\r\n\r"), sd.fname{})
