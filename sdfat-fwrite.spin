@@ -5,7 +5,7 @@
     Description: FATfs on SD: FWrite() example code
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 3, 2023
+    Updated May 13, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -50,7 +50,10 @@ PUB main{} | err, fn, pos, cmd
         repeat
 
     { write test string to file }
-    sd.fseek(0)
+    err := sd.fseek(0)
+    if (err < 0)
+        perror(string("fseek(): "), err)
+        repeat
     bytemove(@_sect_buff, @_test_str, strsize(@_test_str))
     err := sd.fwrite(@_sect_buff, strsize(@_test_str))
     if (err < 0)
