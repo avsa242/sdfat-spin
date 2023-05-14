@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 12, 2023
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -235,18 +235,18 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     status := alloc_clust(cl_free)
     _fclust_last := status
 
-PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nx_clust, status
+PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nxt_entry, status
 ' Count number of clusters used by currently open file
     'dstrln(@"fcount_clust():")
-    ifnot (fnumber{})
+    ifnot ( fnumber{} )
         'dstrln_err(@"    file not open")
         return ENOTOPEN
 
-    { clear the file's entire cluster chain to 0 }
+    { read the FAT sector that contains the file's first cluster }
     clust_nr := ffirst_clust{}
     fat_sect := clust_num_to_fat_sect(clust_nr)
     status := read_fat(fat_sect)
-    if (status <> 512)
+    if ( status <> 512 )
         'dprintf1_err(@"    read error %d\n\r", status)
         return ERDIO
 
@@ -255,11 +255,10 @@ PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nx_clust, status
     repeat
         { read next entry in chain before clearing the current one - need to know where
             to go to next beforehand }
-        nx_clust := clust_rd(clust_nr)
-        clust_wr(clust_nr, 0)
-        clust_nr := nx_clust
+        nxt_entry := clust_rd(clust_nr)
+        clust_nr := nxt_entry
         t_clust++
-    while not (clust_is_eoc(clust_nr))
+    while not ( clust_is_eoc(clust_nr) )
     _fclust_tot := t_clust
     'dstrln(@"fcount_clust(): [ret]")
 
@@ -744,7 +743,7 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 
         { copy the next chunk of data to the sector buffer }
         bytemove((@_sect_buff+_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
-        dhexdump(@_sect_buff, 0, 4, 512, 16)
+'        dhexdump(@_sect_buff, 0, 4, 512, 16)
         status := sd.wr_block(@_sect_buff, _fseek_sect)
         'dprintf1(@"    write status: %d\n\r", status)
         if ( status < 0 )
