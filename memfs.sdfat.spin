@@ -378,13 +378,15 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp, fn_tmp[4], d
     repeat
         longfill(@fn_tmp, 0, 4)
         d := next_file(@fn_tmp)
+        if ( d < 0 )
+            'dstrln(@"    not found")
+            quit
         'dprintf1(@"    checking dirent %d\n\r", d)
         'dprintf2(@"    dirent's filename is %s.%s\n\r", fname(), fname_ext())
         if ( strcomp(ptr_str, dirent_filename(@fn_tmp)) )
             'dstrln(@"    match found")
             'dstrln(@"find() [ret]")
             return d
-    while (d > 0)
     'dstrln(@"find() [ret]")
     return ENOTFOUND
 
