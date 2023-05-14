@@ -5,7 +5,7 @@
     Description: FATfs on SD: directory listing example code
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 9, 2023
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -78,7 +78,7 @@ PUB setup() | err
 
     ser.start(SER_BAUD)
     time.msleep(20)
-    ser.clear
+    ser.clear()
     ser.strln(@"Serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)

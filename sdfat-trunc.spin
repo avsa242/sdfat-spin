@@ -5,7 +5,7 @@
     Description: FATfs on SD: truncate file to 0 bytes
     Copyright (c) 2023
     Started Jun 23, 2022
-    Updated May 3, 2023
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -16,6 +16,8 @@ CON
     _xinfreq    = cfg#_xinfreq
 
 ' --
+    SER_BAUD    = 115_200
+
     { SPI configuration }
     CS_PIN      = 3
     SCK_PIN     = 1
@@ -38,36 +40,36 @@ DAT
 
     _test_str byte "this is the test data", 0
 
-PUB main{} | err, fn, sect
+PUB main() | err, fn, sect
 
-    setup{}
+    setup()
 
-    fn := string("TEST0000.TXT")
+    fn := @"TEST0000.TXT"
     err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
     if (err < 0)
-        perror(string("fopen(): "), err)
+        perror(@"fopen(): ", err)
         repeat
 
-    ser.strln(string("updated FAT:"))
-    sect := sd.fat1_start{}
+    ser.strln(@"updated FAT:")
+    sect := sd.fat1_start()
     sd.rd_block(@_sect_buff, sect)
     ser.hexdump(@_sect_buff, 0, 4, 512, 16)
 
     repeat
 
-PUB setup{} | err
+PUB setup() | err
 
-    ser.start(115_200)
+    ser.start(SER_BAUD)
     time.msleep(20)
-    ser.clear
-    ser.strln(string("serial terminal started"))
+    ser.clear()
+    ser.strln(@"serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
+        ser.printf1(@"Mounted card (%d)\n\r", err)
 
 #include "sderr.spinh"
 

@@ -15,6 +15,8 @@ CON
     _xinfreq    = 5_000_000
 
 ' --
+    SER_BAUD    = 115_200
+
     { SPI configuration }
     CS_PIN      = 3
     SCK_PIN     = 1
@@ -134,17 +136,17 @@ PUB main() | sect, fat_nr, tmp, fat_entry, first_ent, last_ent, new_val
 
 PUB setup() | err
 
-    ser.start(115_200)
+    ser.start(SER_BAUD)
     time.msleep(30)
     ser.clear()
-    ser.strln(string("serial terminal started"))
+    ser.strln(@"serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
+        ser.printf1(@"Mounted card (%d)\n\r", err)
 
 DAT
 {

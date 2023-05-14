@@ -2,7 +2,7 @@
     --------------------------------------------
     Filename: sdfat-fwrite.spin
     Author: Jesse Burt
-    Description: FATfs on SD: FWrite() example code
+    Description: FATfs on SD: fwrite() example code
     Copyright (c) 2023
     Started Jun 11, 2022
     Updated May 13, 2023
@@ -16,6 +16,8 @@ CON
     _xinfreq    = cfg#_xinfreq
 
 ' --
+    SER_BAUD    = 115_200
+
     { SPI configuration }
     CS_PIN      = 3
     SCK_PIN     = 1
@@ -39,50 +41,49 @@ DAT
 
     _test_str byte "AAAAAAAAAAAAAAAAAAAAA", 0
 
-PUB main{} | err, fn, pos, cmd
+PUB main() | err, fn, pos
 
-    setup{}
+    setup()
 
-    fn := string("TEST0000.TXT")
+    fn := @"TEST0000.TXT"
     err := sd.fopen(fn, sd#O_RDWR)
     if (err < 0)
-        perror(string("fopen(): "), err)
+        perror(@"fopen(): ", err)
         repeat
 
     { write test string to file }
     err := sd.fseek(0)
     if (err < 0)
-        perror(string("fseek(): "), err)
+        perror(@"fseek(): ", err)
         repeat
     bytemove(@_sect_buff, @_test_str, strsize(@_test_str))
     err := sd.fwrite(@_sect_buff, strsize(@_test_str))
     if (err < 0)
-        perror(string("fwrite(): "), err)
+        perror(@"fwrite(): ", err)
         repeat
 
     sd.fseek(0)
     repeat
-        ser.clear{}
+        ser.clear()
         bytefill(@_sect_buff, 0, 512)
-        pos := sd.ftell{}                       ' get current seek position
+        pos := sd.ftell()                       ' get current seek position
         err := sd.fread(@_sect_buff, 512)       ' reading advances the seek pointer by the number
                                                 '   of bytes actually read
         if (err < 1)
-            ser.position(0, 0)
-            perror(string("Read error: "), err)
-            ser.charin{}
-            ser.position(0, 0)
-            ser.clearline{}
+            ser.pos_xy(0, 0)
+            perror(@"Read error: ", err)
+            ser.getchar()
+            ser.pos_xy(0, 0)
+            ser.clear_line()
 
-        ser.position(0, 0)
-        ser.printf1(string("fseek(): %d"), pos)
-        ser.clearline{}
-        ser.newline{}
+        ser.pos_xy(0, 0)
+        ser.printf1(@"fseek(): %d", pos)
+        ser.clear_line()
+        ser.newline()
 
         { dump file data read; limit display to number of bytes actually read }
         ser.hexdump(@_sect_buff, pos, 8, err, 16 <# err)
-        repeat until (cmd := ser.charin{})
-        case cmd
+        case ser.getchar()
             "[":
                 pos := 0 #> (pos-512)
                 sd.fseek(pos)
@@ -93,26 +94,28 @@ PUB main{} | err, fn, pos, cmd
                 pos := 0
                 sd.fseek(pos)
             "e":
-                pos := sd.fsize{}-512
+                pos := sd.fsize()-512
                 sd.fseek(pos)
             "p":
-                ser.printf1(string("Enter seek position: (0..%d)> "), sd.fend{})
-                pos := ser.decin{}
+                ser.set_attrs(ser.ECHO)
+                ser.printf1(@"Enter seek position: (0..%d)> ", sd.fend())
+                pos := ser.getdec()
+                ser.set_attrs(0)
                 sd.fseek(pos)
 
-PUB setup{} | err
+PUB setup() | err
 
-    ser.start(115_200)
+    ser.start(SER_BAUD)
     time.msleep(20)
-    ser.clear
-    ser.strln(string("serial terminal started"))
+    ser.clear()
+    ser.strln(@"serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
+        ser.printf1(@"Mounted card (%d)\n\r", err)
 
 #include "sderr.spinh"
 

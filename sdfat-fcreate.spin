@@ -1,8 +1,8 @@
 {
     --------------------------------------------
-    Filename: sdfat-dir.spin
+    Filename: sdfat-fcreate.spin
     Author: Jesse Burt
-    Description: FATfs on SD: directory listing example code
+    Description: FATfs on SD: create file example code
     Copyright (c) 2023
     Started Jun 11, 2022
     Updated May 3, 2023
@@ -16,6 +16,8 @@ CON
     _xinfreq    = cfg#_xinfreq
 
 ' --
+    SER_BAUD    = 115_200
+
     { SPI configuration }
     CS_PIN      = 3
     SCK_PIN     = 1
@@ -35,33 +37,33 @@ DAT
     { filename to create must be 8.3 format; pad with spaces if less than full length }
     _fname byte "TEST0015.TXT", 0
 
-PUB main{} | err, dirent
+PUB main() | err, dirent
 
-    setup{}
+    setup()
 
     dirent := sd.fcreate(@_fname, sd#FATTR_ARC)
     if (dirent < 0)
-        perror(string("Error creating file: "), dirent)
+        perror(@"Error creating file: ", dirent)
         repeat
 
-    ser.printf2(string("Created %s in directory entry #%d\n\r"), @_fname, dirent)
-    ser.strln(string("done"))
+    ser.printf2(@"Created %s in directory entry #%d\n\r", @_fname, dirent)
+    ser.strln(@"done")
 
     repeat
 
-PUB setup{} | err
+PUB setup() | err
 
-    ser.start(115_200)
+    ser.start(SER_BAUD)
     time.msleep(20)
-    ser.clear
-    ser.strln(string("serial terminal started"))
+    ser.clear()
+    ser.strln(@"serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
     if (err < 1)
-        ser.printf1(string("Error mounting SD card %x\n\r"), err)
+        ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
-        ser.printf1(string("Mounted card (%d)\n\r"), err)
+        ser.printf1(@"Mounted card (%d)\n\r", err)
 
 #include "sderr.spinh"
 
