@@ -71,9 +71,9 @@ PUB main() | sect, fat_nr, tmp, fat_entry
                     ser.newline()
                     quit
                 ser.set_attrs(0)
-                fat_entry := sd.clust_rd(tmp)
+                fat_entry := sd.read_fat_entry(tmp)
                 ser.printf1(@"Entry current value: %08.8x\n\r", fat_entry)
-                sd.clust_wr(tmp, 0)
+                sd.write_fat_entry(tmp, 0)
             "w":                                ' write changes to SD
                 sd.write_fat(sect)
                 sd.read_fat(sect)

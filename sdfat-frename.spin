@@ -3,9 +3,9 @@
     Filename: sdfat-frename.spin
     Author: Jesse Burt
     Description: FATfs on SD: FRename() example code
-    Copyright (c) 2022
+    Copyright (c) 2023
     Started Jun 15, 2022
-    Updated Aug 27, 2022
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -25,7 +25,7 @@ CON
 
 OBJ
 
-    cfg : "core.con.boardcfg.flip"
+    cfg : "boardcfg.flip"
     ser : "com.serial.terminal.ansi"
     sd  : "memfs.sdfat"
 
@@ -33,7 +33,7 @@ PUB main{} | err
 
     setup{}
 
-    err := sd.frename(string("TEST0001.TXT"), string("TEST0005.TXT"))
+    err := sd.frename(string("TEST0000.TXT"), string("TEST0100.TXT"))
     if (err < 0)
         perror(string("Error renaming: "), err)
         repeat
@@ -48,7 +48,7 @@ PUB dir{} | dirent, total, endofdir, t_files
     endofdir := false
     t_files := 0
     repeat                                      ' up to 16 entries per sector
-        sd.fclose_ent{}
+        sd.fclose{}
         sd.fopen_ent(dirent++, sd#O_RDONLY)     ' get current dirent's info
         if (sd.fis_vol_nm{})
             ser.printf1(string("Volume name: '%s'\n\r\n\r"), sd.fname{})
@@ -91,7 +91,7 @@ PUB setup{} | err
 
 DAT
 {
-Copyright 2022 Jesse Burt
+Copyright 2023 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

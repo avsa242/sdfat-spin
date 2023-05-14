@@ -46,8 +46,8 @@ VAR
 
 DAT
 
-    _sys_date word ( (43 << 9) | (5 << 5) | 12 )
-    _sys_time word ( (18 << 11) | (53 << 5) | 00 )
+    _sys_date word ( (43 << 9) | (5 << 5) | 14 )
+    _sys_time word ( (07 << 11) | (09 << 5) | 00 )
 
 OBJ
 
@@ -116,13 +116,13 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
         return ERDIO
 
     { check the requested cluster number - is it free? }
-    if (clust_rd(cl_nr) <> 0)
+    if ( read_fat_entry(cl_nr) <> 0 )
         'dstrln_err(@"    cluster in use")
         'dstrln(@"alloc_clust(): [ret]")
         return ECL_INUSE
 
     { write the EOC marker into the newly allocated entry }
-    clust_wr(cl_nr, CLUST_EOC)
+    write_fat_entry(cl_nr, CLUST_EOC)
 
     { write the updated FAT sector to SD }
     'dstrln(@"    updated FAT: ")
@@ -158,17 +158,17 @@ PUB alloc_clust_block(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
     { before trying to allocate clusters, check that the requested number of them are free }
     repeat cl_nr from cl_st_nr to last_cl
         'dprintf1(@"    cluster %d? ", cl_nr)
-        if (clust_rd(cl_nr) <> 0)
+        if ( read_fat_entry(cl_nr) <> 0 )
             'dstrln_err(@"    in use - fail")
             return ENOSPC                        ' cluster is in use
         'dstrln(@"    free")
 
     { link clusters, from first to one before the last one }
     repeat cl_nr from cl_st_nr to (last_cl-1)
-        clust_wr(cl_nr, (cl_nr + 1))
+        write_fat_entry(cl_nr, (cl_nr + 1))
 
     { mark last cluster as the EOC }
-    clust_wr(last_cl, CLUST_EOC)
+    write_fat_entry(last_cl, CLUST_EOC)
 
     { write updated FAT sector }
     if (status := write_fat(fat_sect) <> 512)
@@ -226,7 +226,7 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     if (read_fat(fat_sect) <> 512)
         'dprintf1_err(@"    read error %d\n\r", status)
         return ERDIO
-    clust_wr(flc, cl_free)
+    write_fat_entry(flc, cl_free)
     if (status := write_fat(fat_sect) <> 512)
         'dprintf1_err(@"    write error %d\n\r", status)
         return EWRIO
@@ -255,7 +255,7 @@ PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nxt_entry, status
     repeat
         { read next entry in chain before clearing the current one - need to know where
             to go to next beforehand }
-        nxt_entry := clust_rd(clust_nr)
+        nxt_entry := read_fat_entry(clust_nr)
         clust_nr := nxt_entry
         t_clust++
     while not ( clust_is_eoc(clust_nr) )
@@ -316,7 +316,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
     'dstrln(@"fcreate(): [ret]")
     return dirent_nr
 
-PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
+PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
 ' Delete a file
 '   fn_str: pointer to string containing filename
 '   Returns:
@@ -345,9 +345,9 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nx_clust, tmp
     repeat ftotal_clust{}
         { read next entry in chain before clearing the current one - need to know where
             to go to next beforehand }
-        nx_clust := clust_rd(clust_nr)
-        clust_wr(clust_nr, 0)
-        clust_nr := nx_clust
+        nxt_clust := read_fat_entry(clust_nr)
+        write_fat_entry(clust_nr, 0)
+        clust_nr := nxt_clust
 
     { write modified FAT back to disk }
     if (status := write_fat(fat_sect) <> 512)
@@ -401,7 +401,7 @@ PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
             'dprintf2(@"    fat_sector = %d\tfat1_start() = %d\n\r", fat_sector, fat1_start())
             fat_entry := ( ((fat_sector-fat1_start()) * 128) + fat_sect_entry )
             'dprintf1(@"    fat_entry = %02.2x\n\r", fat_entry)
-            if ( clust_rd(fat_sect_entry) == FREE_CLUST )
+            if ( read_fat_entry(fat_sect_entry) == FREE_CLUST )
                 'dprintf1(@"    found free entry %02.2x\n\r", fat_entry)
                 'dstrln(@"find_free_clust() [ret]")
                 return fat_entry                ' return the absolute FAT entry #
@@ -454,7 +454,7 @@ PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
     { follow chain }
     repeat
         cl_nr := fat_ent
-        fat_ent := clust_rd(fat_ent)
+        fat_ent := read_fat_entry(fat_ent)
         if ( fat_ent == 0 )
             'dstrln(@"    error: invalid FAT entry 0")
             quit    ' abort EFSCORRUPT?
@@ -647,7 +647,7 @@ PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
     read_fat(fat_sect)
     repeat seek_clust
         { read next entry in chain }
-        clust_nr := clust_rd(clust_nr)
+        clust_nr := read_fat_entry(clust_nr)
         sect_offs += 4
 
     { set the absolute sector number and the seek position for subsequent R/W:
@@ -666,7 +666,7 @@ PUB ftell{}: pos
         return ENOTOPEN                          ' no file open
     return _fseek_pos
 
-PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
+PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
 ' Truncate open file to 0 bytes
     { except for the first one, clear the file's entire cluster chain to 0 }
     'dstrln(@"ftrunc():")
@@ -680,14 +680,14 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nx_clust
             'dprintf1_err(@"    read error %d\n\r", status)
             return
         'dprintf1(@"    more than 1 cluster (%d)\n", clust_cnt)
-        clust_nr := clust_rd(clust_nr)           ' immediately skip to the next cluster - make sure
+        clust_nr := read_fat_entry(clust_nr)    ' immediately skip to the next cluster - make sure
         repeat clust_cnt                        '   the first one _doesn't_ get cleared out
             { read next entry in chain before clearing the current one - need to know where
                 to go to next beforehand }
-            nx_clust := clust_rd(clust_nr)
-            clust_wr(clust_nr, 0)
-            clust_nr := nx_clust
-        clust_wr(ffirst_clust{}, CLUST_EOC)
+            nxt_clust := read_fat_entry(clust_nr)
+            write_fat_entry(clust_nr, 0)
+            clust_nr := nxt_clust
+        write_fat_entry(ffirst_clust{}, CLUST_EOC)
         { write modified FAT back to disk }
         if (status := write_fat(fat_sect) <> 512)
             'dprintf1_err(@"    write error %d\n\r", status)
