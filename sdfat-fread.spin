@@ -5,7 +5,7 @@
     Description: FATfs on SD: FRead() example code
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 3, 2023
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -45,23 +45,23 @@ PUB main{} | err, fn, pos, act_read, cmd
         repeat
 
     repeat
-        ser.clear
+        ser.clear()
         bytefill(@_sect_buff, 0, 512)
         pos := sd.ftell{}                       ' get current seek position
         act_read := sd.fread(@_sect_buff, 512)  ' NOTE: this advances the seek pointer by 512
         if (act_read < 1)
-            ser.position(0, 4)
+            ser.pos_xy(0, 4)
             ser.fgcolor(ser#RED)
             perror(string("Read error: "), act_read)
             ser.fgcolor(ser#GREY)
-            ser.charin{}
-            ser.position(0, 4)
-            ser.clearline{}
+            ser.getchar{}
+            ser.pos_xy(0, 4)
+            ser.clear_line{}
 
-        ser.position(0, 5)
+        ser.pos_xy(0, 5)
         ser.printf1(string("fseek(): %d    \n\r"), pos)
         ser.hexdump(@_sect_buff, pos, 8, 512 <# act_read, 16 <# act_read)
-        repeat until (cmd := ser.charin)
+        cmd := ser.getchar()
         case cmd
             "[":
                 pos := 0 #> (pos-512)
@@ -76,8 +76,10 @@ PUB main{} | err, fn, pos, act_read, cmd
                 pos := sd.fsize{}-512
                 sd.fseek(pos)
             "p":
+                ser.set_attrs(ser.ECHO)
                 ser.printf1(string("Enter seek position: (0..%d)> "), sd.fend{})
-                pos := ser.decin
+                pos := ser.getdec()
+                ser.set_attrs(0)
                 sd.fseek(pos)
 
 PUB setup{} | err
