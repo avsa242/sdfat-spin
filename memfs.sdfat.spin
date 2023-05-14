@@ -705,7 +705,7 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
     dirent_update(fnumber{})
 
     'dstrln(@"updated FAT")
-    read_fat(0)
+    'read_fat(0)
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
     'dstrln(@"ftrunc(): [ret]")
 
