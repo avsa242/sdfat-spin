@@ -5,7 +5,7 @@
     Description: FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
     Copyright (c) 2023
     Started Aug 25, 2022
-    Updated May 3, 2023
+    Updated May 14, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -50,17 +50,18 @@ PUB main{} | err, dirent, ee_addr, ee_subpg
 
     setup{}
 
-    if ((sd.find(@_fname)) == sd#ENOTFOUND)
-        ser.str(string("EE dump file doesn't exist; creating..."))
-        err := sd.fcreate(@_fname, sd#FATTR_ARC)
-        if (err < 0)
+    err := sd.fcreate(@_fname, sd#FATTR_ARC)
+    if (err < 0)
+        if ( err <> sd.EEXIST )
             perror(string("Error creating file: "), err)
             repeat
-        sd.fclose{}
-        ser.strln(string("done"))
-    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_APPEND)
+    ser.strln(string("done"))
+
+    { open the file for writing, but truncate it to 0 first, in case it already exists and
+        is non-zero in size }
+    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_TRUNC | sd#O_APPEND)
     if (err < 0)
-        perror(string("Error opening:"), err)
+        perror(string("Error opening: "), err)
         repeat
 
     ser.printf1(string("Opened %s\n\r"), @_fname)
