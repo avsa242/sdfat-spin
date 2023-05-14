@@ -816,13 +816,14 @@ PUB next_file(ptr_fn): fnr | fch
         _last_free_dirent := ((_dir_sect-root_dir_sect()) * 16) + _curr_file
         return ENOTFOUND
 
-pub opendir(ptr_str)
+PUB opendir(ptr_str)
 ' Open a directory for subsequent operations
 '   ptr_str: directory name
 '   TODO: find() dirname - currently only re-reads the rootdir
     _dir_sect := root_dir_sect()
     sd.rd_block(@_meta_buff, _dir_sect)
     read_dirent(0)
+    _curr_file := 0
 
 PUB read_fat(fat_sect): resp
 ' Read the FAT into the sector buffer
