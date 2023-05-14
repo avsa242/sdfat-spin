@@ -235,32 +235,31 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     status := alloc_clust(cl_free)
     _fclust_last := status
 
-PUB fcount_clust{}: t_clust | clust_nr, fat_sect, nxt_entry, status
+PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
 ' Count number of clusters used by currently open file
     'dstrln(@"fcount_clust():")
-    ifnot ( fnumber{} )
-        'dstrln_err(@"    file not open")
+    ifnot ( fnumber() )
+        'dstrln_err(@"    error: file not open")
         return ENOTOPEN
 
-    { read the FAT sector that contains the file's first cluster }
-    clust_nr := ffirst_clust{}
-    fat_sect := clust_num_to_fat_sect(clust_nr)
-    status := read_fat(fat_sect)
-    if ( status <> 512 )
-        'dprintf1_err(@"    read error %d\n\r", status)
-        return ERDIO
-
-    'xxx the below doesn't go past the first sector of the FAT
+    fat_sector := clust_num_to_fat_sect(ffirst_clust())
+    fat_entry := fat_entry_abs_to_rel(ffirst_clust())
     t_clust := 0
-    repeat
-        { read next entry in chain before clearing the current one - need to know where
-            to go to next beforehand }
-        nxt_entry := read_fat_entry(clust_nr)
-        clust_nr := nxt_entry
-        t_clust++
-    while not ( clust_is_eoc(clust_nr) )
-    _fclust_tot := t_clust
-    'dstrln(@"fcount_clust(): [ret]")
+    repeat                                      ' for each FAT sector (relative to 1st)...
+        'dprintf1(@"    FAT sector %d\n\r", fat_sector)
+        read_fat(fat_sector)
+        repeat                                  '   for each FAT entry...
+            'dprintf1(@"    fat_entry = %02x\n\r", fat_entry)
+            nxt_entry := read_fat_entry(fat_entry)
+            fat_entry := nxt_entry
+            _fclust_tot := ++t_clust            ' track total # of clusters used
+            'dprintf1(@"    nxt_entry = %02x\n\r", nxt_entry)
+            if ( clust_is_eoc(nxt_entry) )
+                'dprintf2(@"    EOC reached; total %d/%d clusters\n\r", _fclust_tot, t_clust)
+                'dstrln(@"fcount_clust() [ret]")
+                return t_clust
+        fat_sector++
+    while ( fat_sector < (fat1_start() + sects_per_fat()) )
 
 PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 ' Create file
@@ -269,6 +268,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
     'dstrln(@"fcreate():")
     { first, verify a file with the same name doesn't already exist }
     if ( find(fn_str) <> ENOTFOUND )
+        'dstrln_err(@"    error: file alredy exists")
         return EEXIST
 
     { find a free directory entry, and open it read/write }
@@ -278,7 +278,6 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 
     read_dirent(dirent_nr)                      ' mainly just to zero out anything that's there
     'dprintf1(@"    found dirent # %d\n\r", dirent_nr)
-    'dprintf1(@"    fmode = %x\n\r", _fmode)
 
     { find a free cluster, starting at the beginning of the FAT }
     ffc := find_free_clust()
@@ -298,6 +297,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
     fset_time_created(_sys_time)
     fset_first_clust(ffc)
     dirent_update(dirent_nr)
+    'dhexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
 {
     dstr(@"    file mode is: ")
     if (_fmode & O_RDONLY)
@@ -313,7 +313,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
     { allocate a cluster }
     alloc_clust(ffc)
 
-    'dstrln(@"fcreate(): [ret]")
+    'dprintf1(@"fcreate(): [ret %d]", dirent_nr)
     return dirent_nr
 
 PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
@@ -379,9 +379,13 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp, fn_tmp[4], d
         longfill(@fn_tmp, 0, 4)
         d := next_file(@fn_tmp)
         'dprintf1(@"    checking dirent %d\n\r", d)
+        'dprintf2(@"    dirent's filename is %s.%s\n\r", fname(), fname_ext())
         if ( strcomp(ptr_str, dirent_filename(@fn_tmp)) )
+            'dstrln(@"    match found")
+            'dstrln(@"find() [ret]")
             return d
     while (d > 0)
+    'dstrln(@"find() [ret]")
     return ENOTFOUND
 
 CON FREE_CLUST = 0
@@ -484,10 +488,11 @@ PUB fopen(fn_str, mode): status
 '    else
     if (status == ENOTFOUND)                ' file not found
         'dstrln_err(@"    error: not found")
+        'dprintf1(@"fopen(): [ret %d]\n\r", status)
         return ENOTFOUND
     'dprintf1(@"    found file, dirent # %d\n\r", status)
     status := fopen_ent(status, mode)
-    'dstrln(@"fopen(): [ret]")
+    'dprintf1(@"fopen(): [ret %d]\n\r", status)
 
 PUB fopen_ent(file_nr, mode): status
 ' Open file by dirent # for subsequent operations
@@ -743,7 +748,7 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 
         { copy the next chunk of data to the sector buffer }
         bytemove((@_sect_buff+_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
-'        dhexdump(@_sect_buff, 0, 4, 512, 16)
+        'dhexdump(@_sect_buff, 0, 4, 512, 16)
         status := sd.wr_block(@_sect_buff, _fseek_sect)
         'dprintf1(@"    write status: %d\n\r", status)
         if ( status < 0 )
@@ -790,6 +795,7 @@ PUB next_file(ptr_fn): fnr | fch
 
     fch := byte[@_meta_buff][(_curr_file * DIRENT_LEN)]
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
+    'dprintf1(@"    reading dirent %d\n\r", _curr_file)
     if ( (fch <> $00) )                         ' reached the end of the directory?
         'dprintf1(@"    fn first char is %02.2x - regular file\n\r", fch)
         read_dirent(_curr_file)
