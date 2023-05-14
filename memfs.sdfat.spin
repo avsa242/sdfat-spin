@@ -527,6 +527,9 @@ PUB fopen_ent(file_nr, mode): status
         * cache the file's open mode
         * cache the file's last cluster number; it'll be used later if more need to be
             allocated }
+    if (mode & O_TRUNC)                         ' have to check for this first before any others
+        ftrunc{}                                ' (don't want to truncate to 0 after checking size)
+
     if (mode & O_APPEND)
         mode |= O_WRITE                         ' in case it isn't already
         fseek(fsize{})                          ' init seek pointer to end of file
@@ -536,8 +539,6 @@ PUB fopen_ent(file_nr, mode): status
     _fmode := mode
     ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
         find_last_clust{}                         '   the file's last if creating it
-    if (mode & O_TRUNC)
-        ftrunc{}
     'dstrln(@"fopen_ent(): [ret]")
     return fnumber{}
 
