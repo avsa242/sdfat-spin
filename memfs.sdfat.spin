@@ -717,13 +717,13 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 '       NOTE: a full sector is always written
     'dstrln(@"fwrite():")
     if (fnumber{} < 0)
-        return ENOTOPEN                          ' no file open
+        return ENOTOPEN                         ' no file open
     ifnot (_fmode & O_WRITE)
-        return EWRONGMODE                        ' must be open for writing
+        return EWRONGMODE                       ' must be open for writing
 
     { determine file's max phys. size on disk to see if more space needs to be allocated }
     fcount_clust{}
-    if ((ftell{} + len) > (fphys_size{}-1))      ' is req'd size larger than allocated space?
+    if ( (ftell{} + len) > fphys_size{} )       ' is req'd size larger than allocated space?
         'dstrln(@"    current seek+req'd write len will be greater than file's allocated space")
         ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
             'dstrln(@"    error: bad seek (not opened for appending)")
