@@ -246,6 +246,7 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
     { allocate/write EOC in the newly found free cluster }
     status := alloc_clust(cl_free)
     _fclust_last := status
+    'dprintf1(@"fallocate() [ret: %d]\n\r", status)
 
 PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
 ' Count number of clusters used by currently open file
@@ -265,6 +266,7 @@ PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
             nxt_entry := read_fat_entry(fat_entry)
             fat_entry := nxt_entry
             _fclust_tot := ++t_clust            ' track total # of clusters used
+            'dprintf1(@"    total clusts = %d\n\r", _fclust_tot)
             'dprintf1(@"    nxt_entry = %02x\n\r", nxt_entry)
             if ( fat_entry_is_eoc(nxt_entry) )
                 'dprintf2(@"    EOC reached; total %d/%d clusters\n\r", _fclust_tot, t_clust)
@@ -272,6 +274,7 @@ PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
                 return t_clust
         fat_sector++
     while ( fat_sector < (fat1_start() + sects_per_fat()) )
+    'dstrln(@"fcount_clust() [ret]")
 
 PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 ' Create file
@@ -300,7 +303,7 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
 
     _fmode := O_CREAT
     { set up the file's initial metadata }
-    'dstrln(@"setting up dirent")
+    'dstrln(@"    setting up dirent")
     fset_fname(fn_str)
     fset_ext(fn_str+9)   'XXX expects string at fn_str to be in '8.3' format, _with_ the period
     fset_attrs(attrs)
@@ -397,7 +400,7 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp, fn_tmp[4], d
         'dprintf2(@"    dirent's filename is %s.%s\n\r", fname(), fname_ext())
         if ( strcomp(ptr_str, dirent_filename(@fn_tmp)) )
             'dstrln(@"    match found")
-            'dstrln(@"find() [ret]")
+            'dprintf1(@"find() [ret: %d]\n\r", d)
             return d
     'dstrln(@"find() [ret]")
     return ENOTFOUND
@@ -484,7 +487,7 @@ PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
     'dstrln(@"find_last_clust(): [ret]")
     return cl_nr
 
-PUB fopen(fn_str, mode): status | dirent_nr
+PUB fopen(fn_str, mode): status
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
@@ -504,15 +507,15 @@ PUB fopen(fn_str, mode): status | dirent_nr
         'dstrln_err(@"    error: already open") 'xxx bit of duplication with FOpenEnt()
         return EOPEN
 
-    dirent_nr := find(fn_str)                   ' look for file by name
+    status := find(fn_str)                   ' look for file by name
     'dprintf1(@"    found file, dirent # %d\n\r", status)
 
-    if ( dirent_nr == ENOTFOUND )               ' file not found
+    if ( status == ENOTFOUND )               ' file not found
         if ( mode & O_CREAT )                   ' create it, if the option is given
             status := fcreate(fn_str, FATTR_ARC)
             mode &= !O_CREAT                    ' strip off the create bit for fopen_ent()
-            'dprintf1(@"    fopen() [ret %d]\n\r", status)
             if ( status < 0 )                   ' error creating dirent
+                'dprintf1(@"    fopen() [ret %d]\n\r", status)
                 return
         else
             'dstrln_err(@"    error: not found and O_CREAT not specified")
@@ -536,8 +539,10 @@ PUB fopen_ent(file_nr, mode): status
         'dstrln_warn(@"    already open")
         return EOPEN
 
+    'dprintf2(@"    reading rootdir sect %d+%d...", root_dir_sect{},  dirent_to_sect(file_nr))
     sd.rd_block(@_meta_buff, (root_dir_sect{} + dirent_to_sect(file_nr)))
     _meta_lastread := META_DIR
+    'dstrln(@"    read ok")
 
     read_dirent(file_nr & $0f)               ' cache dirent metadata
     if (dirent_never_used{})
@@ -548,7 +553,6 @@ PUB fopen_ent(file_nr, mode): status
             return
     _file_nr := file_nr 'xxx hacky
     'dhexdump(@_dirent, 0, 4, 32, 16)
-    'dprintf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext) 'xxx corruption in debug output?
     'dprintf1(@"    opened file/dirent # %d\n\r", fnumber{})
 
     { set up the initial state:
@@ -569,6 +573,7 @@ PUB fopen_ent(file_nr, mode): status
     ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
         find_last_clust{}                         '   the file's last if creating it
     'dstrln(@"fopen_ent(): [ret]")
+    'dprintf2(@"fcl_tot: %d  cl_sz: %d\n\r", _fclust_tot, clust_sz())
     return fnumber{}
 
 PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
@@ -753,6 +758,8 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     { determine file's max phys. size on disk to see if more space needs to be allocated }
     fcount_clust{}
     if ( (ftell{} + len) > fphys_size{} )       ' is req'd size larger than allocated space?
+        'dprintf1(@"    ftell() + len = %d\n\r", ftell()+len)
+        'dprintf1(@"    fphys_size()-1 = %d\n\r", fphys_size()-1)
         'dstrln(@"    current seek+req'd write len will be greater than file's allocated space")
         ifnot (_fmode & O_APPEND)   ' xxx make sure this is necessary
             'dstrln(@"    error: bad seek (not opened for appending)")

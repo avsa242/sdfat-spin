@@ -54,7 +54,7 @@ PUB main() | err, dirent, ee_addr, ee_subpg
 
     { open the file for writing, but truncate it to 0 first, in case it already exists and
         is non-zero in size }
-    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_TRUNC | sd#O_APPEND | sd#O_CREAT)
+    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_TRUNC | sd#O_APPEND | sd#O_CREAT )
     if (err < 0)
         perror(@"Error opening: ", err)
         repeat
@@ -62,6 +62,7 @@ PUB main() | err, dirent, ee_addr, ee_subpg
     ser.printf1(@"Opened %s\n\r", @_fname)
     ser.strln(@"dumping EEPROM to file...")
     repeat ee_addr from 0 to 65024 step 512
+        ser.pos_xy(0, 5)
         ser.printf1(@"EE addr: %d\n\r", ee_addr)
         { read 4 pages from the EE at a time to fill the SD buffer for better efficiency }
         repeat ee_subpg from 0 to 3
