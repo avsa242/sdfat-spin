@@ -12,7 +12,7 @@
 #include "debug.spinh"
 CON
 
-' Error codes
+    { Error codes }
     ENOTFOUND   = -2                            ' no such file or directory
     EEOF        = -3                            ' end of file
     EBADSEEK    = -4                            ' bad seek value
@@ -29,7 +29,7 @@ CON
     EWRIO       = -512 {$ff_ff_e0_00}           ' I/O error (writing)
     ERDIO       = -513 {$ff_ff_fd_ff}           ' I/O error (reading)
 
-' File open modes
+    { File open modes }
     O_RDONLY    = (1 << 0)                      ' R
     O_WRITE     = (1 << 1)                      ' W (writes _overwrite_)
     O_RDWR      = O_RDONLY | O_WRITE            ' R/W
@@ -37,12 +37,22 @@ CON
     O_APPEND    = (1 << 3)                      ' W (allow file to grow)
     O_TRUNC     = (1 << 4)                      ' truncate to 0 bytes
 
+    { metadata buffer types }
+    META_DIR    = 1
+    META_FAT    = 2
+
 VAR
+
+    long _meta_sect                             ' sector # of last metadata read
+    long _dir_sect
 
     word _sect_offs
     word _last_free_dirent
+
     byte _sect_buff[sd#SECT_SZ]                 ' sector (data) buffer
     byte _meta_buff[sd#SECT_SZ]                 ' metadata buffer
+    byte _meta_lastread                         ' type of last metadata read
+    byte _curr_file
 
 DAT
 
@@ -187,6 +197,8 @@ PUB dirent_update(dirent_nr): status
 '                                                           dirent_to_abs_sect(dirent_nr) ...
 '                                                            - root_dir_sect() )
     status := sd.rd_block(@_meta_buff, dirent_to_abs_sect(dirent_nr))
+    _meta_lastread := META_DIR
+
     if (status < 0)
         'dprintf1_err(@"    read error %d\n\r", status)
         'dstrln(@"dirent_update(): [ret]")
@@ -525,6 +537,8 @@ PUB fopen_ent(file_nr, mode): status
         return EOPEN
 
     sd.rd_block(@_meta_buff, (root_dir_sect{} + dirent_to_sect(file_nr)))
+    _meta_lastread := META_DIR
+
     read_dirent(file_nr & $0f)               ' cache dirent metadata
     if (dirent_never_used{})
         ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
@@ -787,8 +801,6 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     'dstrln(@"fwrite(): [ret]")
     dirent_update(fnumber{})
 
-var long _dir_sect
-var byte _curr_file
 PUB next_file(ptr_fn): fnr | fch
 ' Find next file in directory
 '   ptr_fn: pointer to copy name of next file found to (set 0 to ignore)
@@ -803,6 +815,7 @@ PUB next_file(ptr_fn): fnr | fch
         if ( ++_dir_sect =< _rootdirend )
             'dprintf1(@"    next dir sector (%d)\n\r", _dir_sect)
             sd.rd_block( @_meta_buff, _dir_sect )
+            _meta_lastread := META_DIR
             'dhexdump(@_meta_buff, 0, 4, 512, 16)
         else                                    ' end of root dir
             'dstrln(@"    last dir sector")
@@ -839,12 +852,17 @@ PUB opendir(ptr_str)
     sd.rd_block(@_meta_buff, _dir_sect)
     read_dirent(0)
     _curr_file := 0
+    _meta_lastread := META_DIR
+    _meta_sect := _dir_sect
 
 PUB read_fat(fat_sect): resp
 ' Read the FAT into the sector buffer
-'   fat_sect: sector of the FAT to read
+'   fat_sect: sector of the FAT to read (relative to start of FAT1)
     'dstrln(@"read_fat():")
-    resp := sd.rd_block(@_meta_buff, (fat1_start{} + fat_sect))
+    fat_sect += fat1_start()
+    resp := sd.rd_block(@_meta_buff, fat_sect)
+    _meta_lastread := META_FAT
+    _meta_sect := fat_sect
     'dprintf1(@"    resp = %d\n\r", resp)
     'dhexdump(@_sect_buff, 0, 4, 512, 16)
     'dstrln(@"read_fat(): [ret]")
