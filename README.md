@@ -40,20 +40,21 @@ P1/SPIN1:
 
 ## Compiler Compatibility
 
-| Processor | Language | Compiler               | Backend     | Status                |
-|-----------|----------|------------------------|-------------|-----------------------|
-| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Bytecode    | OK                    |
-| P1        | SPIN1    | FlexSpin (5.9.14-beta) | Native code | OK                    |
-| P1        | SPIN1    | OpenSpin (1.00.81)     | Bytecode    | Untested (deprecated) |
-| P2        | SPIN2    | FlexSpin (5.9.14-beta) | NuCode      | Untested              |
-| P2        | SPIN2    | FlexSpin (5.9.14-beta) | Native code | Not yet implemented   |
-| P1        | SPIN1    | Brad's Spin Tool (any) | Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 | Propeller Tool (any)   | Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 | PNut (any)             | Bytecode    | Unsupported           |
+| Processor | Language | Compiler                 | Backend     | Status                |
+|-----------|----------|--------------------------|-------------|-----------------------|
+| P1        | SPIN1    | FlexSpin (6.1.1)         | Bytecode    | OK                    |
+| P1        | SPIN1    | FlexSpin (6.1.1)         | Native code | OK                    |
+| P1        | SPIN1    | OpenSpin (1.00.81)       | Bytecode    | Untested (deprecated) |
+| P2        | SPIN2    | FlexSpin (6.1.1)         | NuCode      | Not yet implemented   |
+| P2        | SPIN2    | FlexSpin (6.1.1)         | Native code | Not yet implemented   |
+| P1        | SPIN1    |~~Brad's Spin Tool (any)~~| Bytecode    | Unsupported           |
+| P1, P2    | SPIN1, 2 |~~Propeller Tool (any)~~  | Bytecode    | Unsupported           |
+| P1, P2    | SPIN1, 2 |~~PNut (any)~~            | Bytecode    | Unsupported           |
 
 ## Limitations
 
 * Very early in development - may malfunction, or outright fail to build
 * FAT16, FAT12 not yet supported
 * Pre-SDHC cards unsupported
-
+* No long filename support yet
+* Slow
