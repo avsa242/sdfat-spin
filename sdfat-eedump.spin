@@ -5,7 +5,7 @@
     Description: FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
     Copyright (c) 2023
     Started Aug 25, 2022
-    Updated May 14, 2023
+    Updated May 15, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -46,36 +46,28 @@ DAT
 
 VAR
 
-    byte _ee_page[512]
+    byte _ee_buff[512]
 
 PUB main() | err, dirent, ee_addr, ee_subpg
 
     setup()
 
-    err := sd.fcreate(@_fname, sd#FATTR_ARC)
-    if (err < 0)
-        if ( err <> sd.EEXIST )
-            perror(@"Error creating file: ", err)
-            repeat
-    ser.strln(@"done")
-
     { open the file for writing, but truncate it to 0 first, in case it already exists and
         is non-zero in size }
-    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_TRUNC | sd#O_APPEND)
+    err := sd.fopen(@_fname, sd#O_WRITE | sd#O_TRUNC | sd#O_APPEND | sd#O_CREAT)
     if (err < 0)
         perror(@"Error opening: ", err)
         repeat
 
     ser.printf1(@"Opened %s\n\r", @_fname)
-
     ser.strln(@"dumping EEPROM to file...")
     repeat ee_addr from 0 to 65024 step 512
         ser.printf1(@"EE addr: %d\n\r", ee_addr)
         { read 4 pages from the EE at a time to fill the SD buffer for better efficiency }
         repeat ee_subpg from 0 to 3
-            ee.rd_block_lsbf(@_ee_page + (ee.page_size() * ee_subpg), {
-}           ee_addr + (ee.page_size() * ee_subpg), ee.page_size())
-        sd.fwrite(@_ee_page, 512)
+            ee.rd_block_lsbf(   @_ee_buff + (ee.page_size() * ee_subpg), ...
+                                ee_addr + (ee.page_size() * ee_subpg), ee.page_size())
+        sd.fwrite(@_ee_buff, 512)
 
     ser.str(@"closing file...")
     sd.fclose()

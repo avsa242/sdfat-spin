@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 14, 2023
+    Updated May 15, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -254,7 +254,7 @@ PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
             fat_entry := nxt_entry
             _fclust_tot := ++t_clust            ' track total # of clusters used
             'dprintf1(@"    nxt_entry = %02x\n\r", nxt_entry)
-            if ( clust_is_eoc(nxt_entry) )
+            if ( fat_entry_is_eoc(nxt_entry) )
                 'dprintf2(@"    EOC reached; total %d/%d clusters\n\r", _fclust_tot, t_clust)
                 'dstrln(@"fcount_clust() [ret]")
                 return t_clust
@@ -466,33 +466,47 @@ PUB find_last_clust{}: cl_nr | fat_ent, resp, fat_sect
             quit    ' abort EFSCORRUPT?
         'dprintf1(@"    cl_nr: %x\n\r", cl_nr)
         'dprintf1(@"    fat_ent: %x\n\r", fat_ent)
-    while not (clust_is_eoc(fat_ent))
+    while not (fat_entry_is_eoc(fat_ent))
     'dprintf1(@"    last clust is %x\n\r", cl_nr)
     _fclust_last := cl_nr
     'dstrln(@"find_last_clust(): [ret]")
     return cl_nr
 
-PUB fopen(fn_str, mode): status
+PUB fopen(fn_str, mode): status | dirent_nr
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
-'       mode: O_RDONLY (1), or O_WRITE (2), O_RDWR (3)
+'       mode: (bitwise OR together to combine modes)
+'           O_RDONLY (1): read-only access
+'           O_WRITE (2): overwrite access (won't grow file size)
+'           O_RDWR (3): read/write access (= O_RDONLY | O_WRITE)
+'           O_CREAT (4): create the file if it doesn't exist
+'           O_APPEND (8): write access, always append new data to the end of the file
+'               (fseek() calls are ignored)
+'           O_TRUNC (16): truncate the file to 0 bytes when opening
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
     'dstrln(@"fopen():")
-    if (fnumber{} => 0)                              ' file is already open
-        'dstrln_err(@"    error: already open")   'xxx bit of duplication with FOpenEnt()
+    if ( fnumber{} => 0 )                       ' file is already open
+        'dstrln_err(@"    error: already open") 'xxx bit of duplication with FOpenEnt()
         return EOPEN
-    status := find(fn_str)                      ' look for file by name
-'    if (_fmode & O_CREAT)
-'        status := fcreate(fn_str, FATTR_ARC)
-'    else
-    if (status == ENOTFOUND)                ' file not found
-        'dstrln_err(@"    error: not found")
-        'dprintf1(@"fopen(): [ret %d]\n\r", status)
-        return ENOTFOUND
+
+    dirent_nr := find(fn_str)                   ' look for file by name
     'dprintf1(@"    found file, dirent # %d\n\r", status)
+
+    if ( dirent_nr == ENOTFOUND )               ' file not found
+        if ( mode & O_CREAT )                   ' create it, if the option is given
+            status := fcreate(fn_str, FATTR_ARC)
+            mode &= !O_CREAT                    ' strip off the create bit for fopen_ent()
+            'dprintf1(@"    fopen() [ret %d]\n\r", status)
+            if ( status < 0 )                   ' error creating dirent
+                return
+        else
+            'dstrln_err(@"    error: not found and O_CREAT not specified")
+            'dprintf1(@"fopen(): [ret %d]\n\r", status)
+            return ENOTFOUND
+
     status := fopen_ent(status, mode)
     'dprintf1(@"fopen(): [ret %d]\n\r", status)
 
@@ -522,6 +536,7 @@ PUB fopen_ent(file_nr, mode): status
     'dhexdump(@_dirent, 0, 4, 32, 16)
     'dprintf3(@"    opened file/dirent # %d (%s.%s)\n\r", fnumber{}, @_fname, @_fext) 'xxx corruption in debug output?
     'dprintf1(@"    opened file/dirent # %d\n\r", fnumber{})
+
     { set up the initial state:
         * set the seek pointer to the file's beginning
         * cache the file's open mode
