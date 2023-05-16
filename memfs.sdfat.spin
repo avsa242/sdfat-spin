@@ -799,7 +799,7 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
     dii()
     clust_nr := ffirst_clust{}
     fat_sect := clust_num_to_fat_sect(clust_nr)
-    clust_cnt := fcount_clust{}
+    clust_cnt := _fclust_tot
 
     if (clust_cnt > 1)                          ' if there's only one cluster, nothing here
         status := read_fat(fat_sect)             '   needs to be done
@@ -825,6 +825,7 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
     { set filesize to 0 }
     fset_size(0)
     dirent_update(fnumber{})
+    _fclust_tot := 1                            ' reset file's total cluster count
 
     'dstrln(@"updated FAT")
     'read_fat(0)
