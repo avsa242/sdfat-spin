@@ -290,8 +290,10 @@ PUB fcount_clust{}: t_clust | fat_entry, fat_sector, nxt_entry
         repeat                                  '   for each FAT entry...
             dprintf1(@"fat_entry = %02x\n\r", fat_entry)
             nxt_entry := read_fat_entry(fat_entry)
+            _fclust_last := fat_entry           ' rolling update of the file's last cluster #
             fat_entry := nxt_entry
             _fclust_tot := ++t_clust            ' track total # of clusters used
+            dprintf1(@"last clust = %d\n\r", _fclust_last)
             dprintf1(@"total clusts = %d\n\r", _fclust_tot)
             dprintf1(@"nxt_entry = %02x\n\r", nxt_entry)
             if ( fat_entry_is_eoc(nxt_entry) )
@@ -621,6 +623,8 @@ PUB fopen_ent(file_nr, mode): status
         * cache the file's open mode
         * cache the file's last cluster number; it'll be used later if more need to be
             allocated }
+    fcount_clust()
+
     if (mode & O_TRUNC)                         ' have to check for this first before any others
         ftrunc{}                                ' (don't want to truncate to 0 after checking size)
 
@@ -631,8 +635,6 @@ PUB fopen_ent(file_nr, mode): status
         _fseek_pos := 0
         _fseek_sect := ffirst_sect{}             ' initialize current sector with file's first
     _fmode := mode
-    ifnot (mode & O_CREAT)                      ' don't bother checking which cluster # is
-        find_last_clust{}                         '   the file's last if creating it
     dprintf2(@"_fclust_tot: %d  clust_sz: %d\n\r", _fclust_tot, clust_sz())
     ddi()
     dstrln(@"fopen_ent(): [ret]")
@@ -807,7 +809,7 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
             dprintf1_err(@"read error %d\n\r", status)
             ddi()
             return
-        dprintf1(@"more than 1 cluster (%d)\n", clust_cnt)
+        dprintf1(@"more than 1 cluster (%d)\n\r", clust_cnt)
         clust_nr := read_fat_entry(clust_nr)    ' immediately skip to the next cluster - make sure
         repeat clust_cnt                        '   the first one _doesn't_ get cleared out
             { read next entry in chain before clearing the current one - need to know where
@@ -826,6 +828,7 @@ PUB ftrunc{}: status | clust_nr, fat_sect, clust_cnt, nxt_clust
     fset_size(0)
     dirent_update(fnumber{})
     _fclust_tot := 1                            ' reset file's total cluster count
+    _fclust_last := ffirst_clust()              ' remember the first cluster is the last one now
 
     'dstrln(@"updated FAT")
     'read_fat(0)
@@ -867,7 +870,6 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         { how much of the total to write to this sector }
         sect_wrsz := (sd#SECT_SZ - _sect_offs) <# nr_left
         dprintf1(@"_sect_offs = %d\n\r", _sect_offs)
-        dprintf1(@"sect_wrsz = %d\n\r", sect_wrsz)
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { read the sector's current contents, so it can be merged with this write }
