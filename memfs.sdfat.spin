@@ -5,7 +5,7 @@
     Description: FAT32-formatted SDHC/XC driver
     Copyright (c) 2023
     Started Jun 11, 2022
-    Updated May 15, 2023
+    Updated May 16, 2023
     See end of file for terms of use.
     --------------------------------------------
 }
@@ -264,9 +264,10 @@ PUB fallocate{}: status | flc, cl_free, fat_sect
         ddi()
         return EWRIO
 
-    { allocate/write EOC in the newly found free cluster }
+    { allocate/write EOC in the newly found free cluster and increment the total cluster count }
     status := alloc_clust(cl_free)
     _fclust_last := status
+    _fclust_tot++
     ddi()
     dprintf1(@"fallocate() [ret: %d]\n\r", status)
 
@@ -846,7 +847,6 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         return EWRONGMODE                       ' must be open for writing
 
     { determine file's max phys. size on disk to see if more space needs to be allocated }
-    fcount_clust{}
     if ( (ftell{} + len) > fphys_size{} )       ' is req'd size larger than allocated space?
         dprintf1(@"ftell() + len = %d\n\r", ftell()+len)
         dprintf1(@"fphys_size() = %d\n\r", fphys_size())
