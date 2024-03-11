@@ -1,13 +1,12 @@
 {
-    --------------------------------------------
-    Filename: sdfat-dir.spin
-    Author: Jesse Burt
-    Description: FATfs on SD: directory listing example code
-    Copyright (c) 2023
-    Started Jun 11, 2022
-    Updated May 14, 2023
-    See end of file for terms of use.
-    --------------------------------------------
+---------------------------------------------------------------------------------------------------
+    Filename:       sdfat-dir.spin
+    Description:    FATfs on SD: directory listing example code
+    Author:         Jesse Burt
+    Started:        Jun 11, 2022
+    Updated:        Mar 11, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+---------------------------------------------------------------------------------------------------
 }
 
 CON
@@ -28,7 +27,7 @@ CON
 OBJ
 
     cfg:    "boardcfg.flip"
-    ser:    "com.serial.terminal.ansi"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
     sd:     "memfs.sdfat"
     time:   "time"
 
@@ -76,13 +75,13 @@ PUB main() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
 
 PUB setup() | err
 
-    ser.start(SER_BAUD)
+    ser.start()
     time.msleep(20)
     ser.clear()
     ser.strln(@"Serial terminal started")
 
     err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
-    if (err < 1)
+    if (err < 0)
         ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
@@ -93,7 +92,7 @@ PUB setup() | err
 
 DAT
 {
-Copyright 2023 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
