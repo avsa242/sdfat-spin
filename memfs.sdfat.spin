@@ -10,13 +10,14 @@
     --------------------------------------------
 }
 { debug output overrides }
-#define DBG_RX 24
-#define DBG_TX 25
-#define DBG_BAUD 115_200
+#define DBG_RX 14
+#define DBG_TX 15
+#define DBG_BAUD 230_400
 #define INDENT_SPACES 4
-#include "debug.spinh"
+'#include "debug.spinh"
 CON
 
+    SECTORSIZE  = sd#SECT_SZ
     { Error codes }
     ENOTFOUND   = -2                            ' no such file or directory
     EEOF        = -3                            ' end of file
@@ -61,28 +62,27 @@ VAR
 
 DAT
 
-    _sys_date word ( ((2023-1980) << 9) | (5 << 5) | 16 )
-    _sys_time word ( (11 << 11) | (46 << 5) | 00 )
+    _sys_date word ( ((2023-1980) << 9) | (7 << 5) | 3 )
+    _sys_time word ( (18 << 11) | (25 << 5) | 00 )
 
 OBJ
 
     sd:     "memory.sd-spi"
     str:    "string"
     time:   "time"
-    ser:    "com.serial.terminal.ansi"
+'    ser:    "com.serial.terminal.ansi"
 
 PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 
-    ser.startrxtx(DBG_RX, DBG_TX, 0, DBG_BAUD)
-    time.msleep(20)
-    ser.clear()
-    dreset()
-    dstrln_info(@"SD/FAT debug started")
+'    ser.startrxtx(DBG_RX, DBG_TX, 0, DBG_BAUD)
+'    time.msleep(20)
+'    ser.clear()
+'    dreset()
+'    dstrln_info(@"SD/FAT debug started")
 
     status := sd.init(SD_CS, SD_SCK, SD_MOSI, SD_MISO)
     if lookdown(status: 1..8)
-        mount{}
-        return
+        status := mount{}
     return status
 
 PUB mount{}: status
@@ -98,21 +98,25 @@ PUB mount{}: status
 
     { read the MBR }
     status := sd.rd_block(@_meta_buff, MBR)
+    'dlprintf1(0, 0, INFO, @"sd.rd_block() [ret: %d]\n\r", status)
     if (status < 0)
         return status
 
     { get 1st partition's 1st sector number from it }
     status := read_part{}
+    'dlprintf1(0, 0, INFO, @"read_part() [ret: %d]\n\r", status)
     if (status < 0)
         return status
 
     { now read that sector }
     status := sd.rd_block(@_meta_buff, part_start{})
+    'dlprintf1(0, 0, INFO, @"sd.rd_block() [ret: %d]\n\r", status)
     if (status < 0)
         return status
 
     { sync the FATfs metadata from it }
     status := read_bpb{}
+    'dlprintf1(0, 0, INFO, @"read_bpb() [ret: %d]\n\r", status)
     if (status < 0)
         return status
 
@@ -613,6 +617,7 @@ PUB fopen_ent(file_nr, mode): status
     'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", fnumber())
     return fnumber{}
 
+PUB rdblock_lsbf = fread
 PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 ' Read a block of data from current seek position of opened file into ptr_dest
 '   Valid values:
@@ -621,10 +626,10 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '   Returns:
 '       number of bytes actually read,
 '       or error
-    'dlstrln(0, 1, INFO, @"fread():")
+'    dlstrln(0, 1, INFO, @"fread():")
     if (fnumber{} < 0)                          ' no file open
-        'dlstrln(0, 0, ERR, @"no file open")
-        'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ENOTOPEN)
+'        dlstrln(0, 0, ERR, @"no file open")
+'        dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ENOTOPEN)
         return ENOTOPEN
 
     nr_read := nr_left := 0
@@ -633,21 +638,21 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
     if (_fseek_pos < fsize{})
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
-        'dlprintf1(0, 0, NORM, @"nr_bytes: %d\n\r", nr_bytes) 'xxx terminal corruption
+'        dlprintf1(0, 0, NORM, @"nr_bytes: %d\n\r", nr_bytes) 'xxx terminal corruption
         nr_bytes := nr_bytes <# sect_sz{} <# fsize{} <# (fsize{}-_fseek_pos) ' XXX seems like this should be -1
-        'dlprintf1(0, 0, NORM, @"sectsz: %d\n\r", sect_sz{})
-        'dlprintf1(0, 0, NORM, @"fsize: %d\n\r", fsize{})
-        'dlprintf1(0, 0, NORM, @"(fsize-_fseek_pos): %d\n\r", fsize{}-_fseek_pos)
+'        dlprintf1(0, 0, NORM, @"sectsz: %d\n\r", sect_sz{})
+'        dlprintf1(0, 0, NORM, @"fsize: %d\n\r", fsize{})
+'        dlprintf1(0, 0, NORM, @"(fsize-_fseek_pos): %d\n\r", fsize{}-_fseek_pos)
 
         { read a block from the SD card into the internal sector buffer }
         if ( _fseek_sect <> _fseek_prev_sect )
             resp := sd.rd_block(@_sect_buff, _fseek_sect)
             if (resp < 1)
-                'dstrln(0, 0, ERR, @"read error")
-                'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ERDIO)
+'                dlstrln(0, 0, ERR, @"read error")
+'                dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ERDIO)
                 return ERDIO
         else
-            'dlstrln(0, INFO, @"current seek sector == prev seek sector; not re-reading")
+'            dlstrln(0, 0, INFO, @"current seek sector == prev seek sector; not re-reading")
 
         { copy as many bytes as possible from it into the user's buffer }
         movbytes := sect_sz{}-_sect_offs
@@ -660,20 +665,36 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         if (nr_left > 0)
             resp := sd.rd_block(@_sect_buff, _fseek_sect)
             if (resp < 1)
-                'dlstrln(0, 0, ERR, @"read error")
-                'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ERDIO)
+'                dlstrln(0, 0, ERR, @"read error")
+'                dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ERDIO)
                 return ERDIO
             bytemove(ptr_dest+nr_read, @_sect_buff, nr_left)
             nr_read += nr_left
         _fseek_prev_sect := _fseek_sect
         fseek(_fseek_pos + nr_read)             ' update seek pointer
-        'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", nr_read)
+'        dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", nr_read)
         return nr_read
     else
-        'dlstrln(0, 0, ERR, @"end of file")
-        'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", EEOF)
+'        dlstrln(0, 0, ERR, @"end of file")
+'        dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", EEOF)
         return EEOF                             ' reached end of file
-    'dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", nr_read)
+'    dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", nr_read)
+
+pub rd_byte(): b
+
+    b := 0
+    fread(@b, 1)
+
+pub rd_word(): w
+
+    w := 0
+    fread(@w, 2)
+
+pub rd_long(): l
+
+    l := 0
+    fread(@l, 4)
+
 
 PUB frename(fn_old, fn_new): status | dirent
 ' Rename file
@@ -953,10 +974,12 @@ PUB write_fat(fat_sect): resp
 
 ' below: temporary, for devel purposes
 
+pub readsector = rd_block
 pub rd_block(ptr, sect)
 
     return sd.rd_block(ptr, sect)
 
+pub writesector = wr_block
 pub wr_block(ptr, sect): resp
 
     return sd.wr_block(ptr, sect)
