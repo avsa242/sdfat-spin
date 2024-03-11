@@ -17,8 +17,14 @@
 '#include "debug.spinh"
 CON
 
-    SECTORSIZE  = sd.SECT_SZ
-    { Error codes }
+    { default I/O settings - these can be overridden by the parent object }
+    CS          = 0
+    SCK         = 1
+    MOSI        = 2
+    MISO        = 3
+
+
+    { File I/O Error codes }
     ENOTFOUND   = -2                            ' no such file or directory
     EEOF        = -3                            ' end of file
     EBADSEEK    = -4                            ' bad seek value
@@ -72,8 +78,17 @@ OBJ
     time:   "time"
 '    ser:    "com.serial.terminal.ansi"
 
-PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
+pub start(): status
+' Start the driver using default I/O settings
+    return startx(CS, SCK, MOSI, MISO)
 
+PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
+' Start the driver using custom I/O settings
+'   SD_CS:      Chip Select
+'   SD_SCK:     Serial Clock
+'   SD_MOSI:    Master-Out Slave-In
+'   SD_MISO:    Master-In Slave-Out
+'   Returns:    cog ID+1 of SPI engine, or negative numbers on error
 '    ser.startrxtx(DBG_RX, DBG_TX, 0, DBG_BAUD)
 '    time.msleep(20)
 '    ser.clear()
@@ -81,7 +96,7 @@ PUB startx(SD_CS, SD_SCK, SD_MOSI, SD_MISO): status
 '    dstrln_info(@"SD/FAT debug started")
 
     status := sd.init(SD_CS, SD_SCK, SD_MOSI, SD_MISO)
-    if lookdown(status: 1..8)
+    if ( lookdown(status: 1..8) )
         status := mount()
     return status
 

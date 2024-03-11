@@ -14,26 +14,19 @@ CON
     _clkmode    = cfg#_clkmode
     _xinfreq    = cfg#_xinfreq
 
-' --
-    SER_BAUD    = 115_200
-
-    { SPI configuration }
-    CS_PIN      = 3
-    SCK_PIN     = 1
-    MOSI_PIN    = 2
-    MISO_PIN    = 0
-' --
 
 OBJ
 
     cfg:    "boardcfg.flip"
     ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sd:     "memfs.sdfat"
+    sd:     "memfs.sdfat" | CS=3, SCK=1, MOSI=2, MISO=0
     time:   "time"
+
 
 VAR
 
     byte _fname[8+1+3+1]                        ' file name + "." + extension + NUL
+
 
 PUB main() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
 
@@ -73,6 +66,7 @@ PUB main() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
     ser.printf1(@" (%d bytes)\n\r", tsz)
     repeat
 
+
 PUB setup() | err
 
     ser.start()
@@ -80,7 +74,7 @@ PUB setup() | err
     ser.clear()
     ser.strln(@"Serial terminal started")
 
-    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
+    err := sd.start()
     if (err < 0)
         ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
@@ -89,6 +83,7 @@ PUB setup() | err
 
 #include "fatfs-common.spinh"                   ' common output formatting methods, date/time conv
 #include "sderr.spinh"                          ' error numbers to strings
+
 
 DAT
 {
