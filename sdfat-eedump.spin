@@ -1,52 +1,39 @@
 {
-    --------------------------------------------
-    Filename: sdfat-eedump.spin
-    Author: Jesse Burt
-    Description: FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
-    Copyright (c) 2023
-    Started Aug 25, 2022
-    Updated May 15, 2023
-    See end of file for terms of use.
-    --------------------------------------------
+---------------------------------------------------------------------------------------------------
+    Filename:       sdfat-eedump.spin
+    Description:    FATfs on SD: dump a 64KB EEPROM to a file on SD/FAT
+    Author:         Jesse Burt
+    Started:        Aug 25, 2022
+    Updated:        Mar 11, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+---------------------------------------------------------------------------------------------------
 }
 
 CON
 
-    _clkmode    = cfg#_clkmode
-    _xinfreq    = cfg#_xinfreq
+    _clkmode    = cfg._clkmode
+    _xinfreq    = cfg._xinfreq
 
-' --
-    SER_BAUD    = 115_200
-
-    { SPI configuration }
-    CS_PIN      = 3
-    SCK_PIN     = 1
-    MOSI_PIN    = 2
-    MISO_PIN    = 0
-
-    { I2C configuration }
-    I2C_SCL     = 28
-    I2C_SDA     = 29
-    I2C_FREQ    = 400_000
-    ADDR_BITS   = 0
-' --
 
 OBJ
 
     cfg:    "boardcfg.flip"
-    ser:    "com.serial.terminal.ansi"
-    sd:     "memfs.sdfat"
     time:   "time"
-    ee:     "memory.eeprom.24xxxx"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
+    sd:     "memfs.sdfat" | CS=0, SCK=1, MOSI=2, MISO=3
+    ee:     "memory.eeprom.24xxxx" | SCL=28, SDA=29, I2C_FREQ=400_000, I2C_ADDR=0
+
 
 DAT
 
     { filename to create must be 8.3 format; pad with spaces if less than full length }
     _fname byte "P1EEPROM.BIN", 0
 
+
 VAR
 
     byte _ee_buff[512]
+
 
 PUB main() | err, dirent, ee_addr, ee_subpg
 
@@ -75,21 +62,22 @@ PUB main() | err, dirent, ee_addr, ee_subpg
     ser.strln(@"done")
     repeat
 
+
 PUB setup() | err
 
-    ser.start(SER_BAUD)
+    ser.start()
     time.msleep(20)
     ser.clear()
     ser.strln(@"serial terminal started")
 
-    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
-    if (err < 1)
+    err := sd.start()
+    if ( err < 0 )
         ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
         ser.printf1(@"Mounted card (%d)\n\r", err)
 
-    if (ee.startx(I2C_SCL, I2C_SDA, I2C_FREQ, ADDR_BITS))
+    if ( ee.start() )
         ser.strln(@"EEPROM driver started")
     else
         ser.strln(@"EEPROM driver failed to start - halting")
@@ -97,9 +85,10 @@ PUB setup() | err
 
 #include "sderr.spinh"
 
+
 DAT
 {
-Copyright 2023 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

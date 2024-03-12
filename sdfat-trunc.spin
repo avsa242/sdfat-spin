@@ -1,51 +1,44 @@
 {
-    --------------------------------------------
-    Filename: sdfat-trunc.spin
-    Author: Jesse Burt
-    Description: FATfs on SD: truncate file to 0 bytes
-    Copyright (c) 2023
-    Started Jun 23, 2022
-    Updated May 14, 2023
-    See end of file for terms of use.
-    --------------------------------------------
+---------------------------------------------------------------------------------------------------
+    Filename:       sdfat-trunc.spin
+    Description:    FATfs on SD: truncate file to 0 bytes
+    Author:         Jesse Burt
+    Started:        Jun 23, 2022
+    Updated:        Mar 12, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+---------------------------------------------------------------------------------------------------
 }
 
 CON
 
-    _clkmode    = cfg#_clkmode
-    _xinfreq    = cfg#_xinfreq
+    _clkmode    = cfg._clkmode
+    _xinfreq    = cfg._xinfreq
 
-' --
-    SER_BAUD    = 115_200
-
-    { SPI configuration }
-    CS_PIN      = 3
-    SCK_PIN     = 1
-    MOSI_PIN    = 2
-    MISO_PIN    = 0
-' --
 
 OBJ
 
     cfg:    "boardcfg.flip"
-    ser:    "com.serial.terminal.ansi"
     time:   "time"
-    sd:     "memfs.sdfat"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
+    sd:     "memfs.sdfat" | CS=0, SCK=1, MOSI=2, MISO=3
+
 
 VAR
 
     byte _sect_buff[512]
 
+
 DAT
 
     _test_str byte "this is the test data", 0
+
 
 PUB main() | err, fn, sect
 
     setup()
 
     fn := @"TEST0000.TXT"
-    err := sd.fopen(fn, sd#O_WRITE | sd#O_TRUNC)
+    err := sd.fopen(fn, sd.O_WRITE | sd.O_TRUNC)
     if (err < 0)
         perror(@"fopen(): ", err)
         repeat
@@ -57,15 +50,16 @@ PUB main() | err, fn, sect
 
     repeat
 
+
 PUB setup() | err
 
-    ser.start(SER_BAUD)
+    ser.start()
     time.msleep(20)
     ser.clear()
     ser.strln(@"serial terminal started")
 
-    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
-    if (err < 1)
+    err := sd.start()
+    if (err < 0)
         ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
@@ -73,9 +67,10 @@ PUB setup() | err
 
 #include "sderr.spinh"
 
+
 DAT
 {
-Copyright 2023 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,

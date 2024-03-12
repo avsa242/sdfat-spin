@@ -1,36 +1,27 @@
 {
-    --------------------------------------------
-    Filename: sdfat-delete.spin
-    Author: Jesse Burt
-    Description: FATfs on SD: delete file example code
-    Copyright (c) 2023
-    Started Jun 16, 2022
-    Updated May 14, 2023
-    See end of file for terms of use.
-    --------------------------------------------
+---------------------------------------------------------------------------------------------------
+    Filename:       sdfat-fdelete.spin
+    Description:    FATfs on SD: delete file example code
+    Author:         Jesse Burt
+    Started:        Jun 16, 2022
+    Updated:        Mar 12, 2024
+    Copyright (c) 2024 - See end of file for terms of use.
+---------------------------------------------------------------------------------------------------
 }
 
 CON
 
-    _clkmode    = cfg#_clkmode
-    _xinfreq    = cfg#_xinfreq
+    _clkmode    = cfg._clkmode
+    _xinfreq    = cfg._xinfreq
 
-' --
-    SER_BAUD    = 115_200
-
-    { SPI configuration }
-    CS_PIN      = 3
-    SCK_PIN     = 1
-    MOSI_PIN    = 2
-    MISO_PIN    = 0
-' --
 
 OBJ
 
     cfg:    "boardcfg.flip"
-    ser:    "com.serial.terminal.ansi"
-    sd:     "memfs.sdfat"
     time:   "time"
+    ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
+    sd:     "memfs.sdfat" | CS=0, SCK=1, MOSI=2, MISO=3
+
 
 PUB main() | err
 
@@ -59,10 +50,10 @@ PUB dir() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
 ' Display directory listing
     sd.opendir(0)
     ser.printf1(@"Volume label: [%s]\n\r", sd.vol_name())
-    longfill(@err, 0, 7)
+    longfill(@err, 0, 7)                        ' init vars to 0
 
     show_del := false                           ' set non-zero to show deleted files
-
+    
     repeat
         err := sd.next_file(@_fname)            ' get dirent # and copy filename
         if ( err > 0 )
@@ -93,13 +84,13 @@ PUB dir() | err, show_del, del_cnt, reg_cnt, dir_cnt, t_files, tsz
 
 PUB setup() | err
 
-    ser.start(SER_BAUD)
+    ser.start()
     time.msleep(20)
     ser.clear()
     ser.strln(@"serial terminal started")
 
-    err := sd.startx(CS_PIN, SCK_PIN, MOSI_PIN, MISO_PIN)
-    if (err < 1)
+    err := sd.start()
+    if (err < 0)
         ser.printf1(@"Error mounting SD card %x\n\r", err)
         repeat
     else
@@ -108,9 +99,10 @@ PUB setup() | err
 #include "fatfs-common.spinh"
 #include "sderr.spinh"
 
+
 DAT
 {
-Copyright 2023 Jesse Burt
+Copyright 2024 Jesse Burt
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
