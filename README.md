@@ -5,6 +5,7 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 
 **IMPORTANT**: This software is meant to be used with the [spin-standard-library](https://github.com/avsa242/spin-standard-library) (P8X32A) or [p2-spin-standard-library](https://github.com/avsa242/p2-spin-standard-library) (P2X8C4M64P). Please install the applicable library first before attempting to use this code, otherwise you will be missing several files required to build the project.
 
+
 ## Salient Features
 
 * FAT32 on SDHC/SDXC
@@ -14,6 +15,7 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 * File management: rename, delete, create, find by filename
 * Cluster management: Find free cluster, allocate an arbitrary cluster, allocate block of clusters, allocate additional cluster for currently open file, count clusters allocated to file
 * POSIX-ish familiarities: (some) method names and params, file open modes
+
 
 ## File open modes supported
 
@@ -28,6 +30,7 @@ This is a P8X32A/Propeller, P2X8C4M64P/Propeller 2 implementation of the FAT fil
 
 (modes are bitfields that can be OR'd together)
 
+
 ## Requirements
 
 P1/SPIN1:
@@ -38,23 +41,26 @@ P1/SPIN1:
 ~~P2/SPIN2:~~
 * ~~p2-spin-standard-library~~
 
+
 ## Compiler Compatibility
 
-| Processor | Language | Compiler                 | Backend     | Status                |
-|-----------|----------|--------------------------|-------------|-----------------------|
-| P1        | SPIN1    | FlexSpin (6.1.1)         | Bytecode    | OK                    |
-| P1        | SPIN1    | FlexSpin (6.1.1)         | Native code | OK                    |
-| P1        | SPIN1    | OpenSpin (1.00.81)       | Bytecode    | Untested (deprecated) |
-| P2        | SPIN2    | FlexSpin (6.1.1)         | NuCode      | Not yet implemented   |
-| P2        | SPIN2    | FlexSpin (6.1.1)         | Native code | Not yet implemented   |
-| P1        | SPIN1    |~~Brad's Spin Tool (any)~~| Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 |~~Propeller Tool (any)~~  | Bytecode    | Unsupported           |
-| P1, P2    | SPIN1, 2 |~~PNut (any)~~            | Bytecode    | Unsupported           |
+| Processor | Language | Compiler               | Backend      | Status                |
+|-----------|----------|------------------------|--------------|-----------------------|
+| P1        | SPIN1    | FlexSpin (6.8.1)       | Bytecode     | OK                    |
+| P1        | SPIN1    | FlexSpin (6.8.1)       | Native/PASM  | Some demos FTBFS      |
+| P2        | SPIN2    | FlexSpin (6.8.1)       | NuCode       | Not yet implemented   |
+| P2        | SPIN2    | FlexSpin (6.8.1)       | Native/PASM2 | Not yet implemented   |
+
+(other versions or toolchains not listed are __not supported__, and _may or may not_ work)
+
 
 ## Limitations
 
 * Very early in development - may malfunction, or outright fail to build
 * FAT16, FAT12 not yet supported
-* Pre-SDHC cards unsupported
+* Pre-SDHC cards unsupported (unplanned)
+* No (sub)directory support yet
 * No long filename support yet
 * Slow
+* API should be considered unstable
+
