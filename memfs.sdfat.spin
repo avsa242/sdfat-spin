@@ -877,7 +877,10 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         'dlprintf1(0, 0, NORM, @"_sect_offs = %d\n\r", _sect_offs)
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
-        { read the sector's current contents, so it can be merged with this write }
+        { We can't simply write the new data to the sector - the card will actually
+            erase the sector before writing, so any data in there would be lost. In order to merge
+            this new data with what's already in the sector, we have to read the sector first,
+            combine it in RAM, then write the modified sector back to the card. }
             resp := sd.rd_block(@_sect_buff, _fseek_sect)
             if (resp < 1)
                 'dlstrln(0, 0, ERR, @"read error")
@@ -900,6 +903,9 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
             'dlprintf1(0, 0, NORM, @"file end is %d\n\r", fend())
             if ( (_fseek_pos + sect_wrsz) > fsize() )
                 'dlprintf2(0, 0, WARN, @"updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
+                { remember, it was determined already whether more clusters needed to be allocated
+                    to accommodate the new size, so all that needs to be done here is update the
+                    size recorded in the dirent }
                 fset_size(fsize() + sect_wrsz)
             { update position to advance by how much was just written }
             fseek(_fseek_pos + sect_wrsz)
@@ -948,6 +954,8 @@ PUB next_file(ptr_fn): fnr | fch
         'dlprintf1(0, 0, NORM, @"fn first char is %02.2x\n\r", fch)
         'dlstrln(0, 0, WARN, @"no more files")
         'dlprintf1(-1, 0, INFO, @"next_file() [ret: %d]\n\r", ENOTFOUND)
+        { we're just updating this here/now because we happened to be in the right place at the
+            right time; it isn't related to the error we're returning }
         _last_free_dirent := ((_dir_sect-root_dir_sect()) * 16) + _curr_file
         return ENOTFOUND
 
