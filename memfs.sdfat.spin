@@ -203,7 +203,7 @@ PUB alloc_clust_block(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
             return ENOSPC                        ' cluster is in use
         'dlstrln(0, 0, NORM, @"free")
 
-    { link clusters, from first to one before the last one }
+    { link clusters, from the first to one before the last one }
     repeat cl_nr from cl_st_nr to (last_cl-1)
         write_fat_entry(cl_nr, (cl_nr + 1))
 
@@ -494,7 +494,7 @@ PUB find_free_dirent(): dirent_nr | endofdir, d
     while ( d > 0 )
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
     'dlprintf1(-1, 0, INFO, @"find_free_dirent() [ret: %d]\n\r", dirent_nr+1)
-    return dirent_nr+1
+    return dirent_nr+1                          ' the last used dirent+1 == 1st unused entry
 
 PUB find_last_clust(): cl_nr | fat_ent, resp, fat_sect
 ' Find last cluster # of file
@@ -518,7 +518,7 @@ PUB find_last_clust(): cl_nr | fat_ent, resp, fat_sect
     'dlprintf1(0, 0, NORM, @"first clust: %x\n\r", fat_ent)
     { read the FAT }
     fat_sect := clust_num_to_fat_sect(fat_ent)
-    if (cl_nr := read_fat(fat_sect) <> 512)
+    if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", cl_nr)
         'dlprintf1(-1, 0, INFO, @"find_last_clust() [ret: %d]\n\r", ERDIO)
         return ERDIO
@@ -588,8 +588,6 @@ PUB fopen_ent(file_nr, mode): status
 '       file number (dirent #) if successful,
 '       or error
     'dlstrln(0, 1, INFO, @"fopen_ent():")
-    if (mode & O_CREAT)
-        'dlstrln(0, 0, WARN, @"opened with O_CREAT set")
     if (fnumber() => 0)
         'dlprintf1(0, 0, WARN, @"file #%d already open\n\r", fnumber())
         'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", EOPEN)
@@ -597,16 +595,17 @@ PUB fopen_ent(file_nr, mode): status
 
     'dlprintf2(0, 0, NORM, @"reading rootdir sect %d+%d...", root_dir_sect(),  dirent_to_sect(file_nr))
     sd.rd_block(@_meta_buff, (root_dir_sect() + dirent_to_sect(file_nr)))
-    _meta_lastread := META_DIR
+    _meta_lastread := META_DIR                  ' indicate metadata last read is of type directory
     'dlstrln(0, 0, NORM, @"read ok")
 
-    read_dirent(file_nr & $0f)               ' cache dirent metadata
+    { open the file }
+    read_dirent(file_nr & $0f)                  ' cache dirent metadata
     if (dirent_never_used())
-        ifnot (mode & O_CREAT)              ' need create bit set to open an unused dirent
+        ifnot (mode & O_CREAT)                  ' need create bit set to open an unused dirent
             fclose()
             'dlstrln(0, 0, ERR, @"error: dirent unused")
             'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", status)
-            return
+            return ENOTFOUND
     _file_nr := file_nr 'xxx hacky
     'dhexdump(@_dirent, 0, 4, 32, 16)
     'dlprintf1(0, 0, NORM, @"opened file/dirent # %d\n\r", fnumber())
@@ -654,7 +653,7 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
         { clamp nr_bytes to physical limits:
             sector size, file size, and proximity to end of file }
 '        dlprintf1(0, 0, NORM, @"nr_bytes: %d\n\r", nr_bytes) 'xxx terminal corruption
-        nr_bytes := nr_bytes <# sect_sz() <# fsize() <# (fsize()-_fseek_pos) ' XXX seems like this should be -1
+        nr_bytes := nr_bytes <# sect_sz() <# fsize() <# (fsize()-_fseek_pos)
 '        dlprintf1(0, 0, NORM, @"sectsz: %d\n\r", sect_sz())
 '        dlprintf1(0, 0, NORM, @"fsize: %d\n\r", fsize())
 '        dlprintf1(0, 0, NORM, @"(fsize-_fseek_pos): %d\n\r", fsize()-_fseek_pos)
@@ -666,7 +665,7 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '                dlstrln(0, 0, ERR, @"read error")
 '                dlprintf1(-1, 0, INFO, @"fread() [ret: %d]\n\r", ERDIO)
                 return ERDIO
-        else
+'        else
 '            dlstrln(0, 0, INFO, @"current seek sector == prev seek sector; not re-reading")
 
         { copy as many bytes as possible from it into the user's buffer }
@@ -788,7 +787,7 @@ PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
         also, set offset within sector to find the start of the data (0..bytes per sector-1) }
     _fseek_sect := (clust_to_sect(clust_nr) + rel_sect_nr)
     _fseek_pos := pos
-    _sect_offs := (pos // sect_sz())
+    _sect_offs := (pos // sect_sz())            ' record which (n'th) sector of the file this is
     'dlprintf1(-1, 0, INFO, @"fseek() [ret: %d]\n\r", pos)
     return pos
 
@@ -889,11 +888,11 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         bytemove((@_sect_buff+_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
         'dhexdump(@_sect_buff, 0, 4, 512, 16)
         status := sd.wr_block(@_sect_buff, _fseek_sect)
-        if ( status < 0 )
+        if ( status <> sd.WRITE_OK )
             'dlstrln(0, 0, ERR, @"write error")
             'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", EWRIO)
             return EWRIO
-        if ( status == sd.SECT_SZ )
+        if ( status == sd.WRITE_OK )
             { if written portion goes past the EOF, update the size (otherwise we're just
                 overwriting what's already there) }
             'dlprintf1(0, 0, NORM, @"seek pos is %d\n\r", _fseek_pos)
