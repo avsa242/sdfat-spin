@@ -147,7 +147,7 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
 
     { read FAT sector }
     fat_sect := clust_num_to_fat_sect(cl_nr)
-    if ( (status := read_fat(fat_sect)) <> 512 )
+    if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", ERDIO)
         return ERDIO
@@ -164,7 +164,7 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
     { write the updated FAT sector to SD }
     'dlstrln(0, NORM, @"updated FAT: ")
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
-    if (status := write_fat(fat_sect) <> 512)
+    if ( write_fat(fat_sect) <> sd.WRITE_OK )
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", EWRIO)
         return EWRIO
@@ -188,7 +188,7 @@ PUB alloc_clust_block(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
 
     { read FAT sector }
     fat_sect := clust_num_to_fat_sect(cl_st_nr)
-    if (read_fat(fat_sect) <> 512)
+    if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust_block() [ret: %d]\n\r", ERDIO)
         return ERDIO
@@ -211,7 +211,7 @@ PUB alloc_clust_block(cl_st_nr, count): status | cl_nr, tmp, last_cl, fat_sect
     write_fat_entry(last_cl, CLUST_EOC)
 
     { write updated FAT sector }
-    if (status := write_fat(fat_sect) <> 512)
+    if ( write_fat(fat_sect) <> sd.WRITE_OK )
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust_block() [ret: %d]\n\r", EWRIO)
         return EWRIO
@@ -269,12 +269,12 @@ PUB allocate_cluster(): status | flc, cl_free, fat_sect
 
     { rewrite the file's last cluster entry to point to the newly found free cluster }
     fat_sect := clust_num_to_fat_sect(flc)
-    if (read_fat(fat_sect) <> 512)
+    if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return ERDIO
     write_fat_entry(flc, cl_free)
-    if (status := write_fat(fat_sect) <> 512)
+    if ( write_fat(fat_sect) <> sd.WRITE_OK )
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return EWRIO
@@ -397,8 +397,7 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
     { clear the file's entire cluster chain to 0 }
     clust_nr := ffirst_clust()
     fat_sect := clust_num_to_fat_sect(clust_nr)
-    status := read_fat(fat_sect)
-    if (status <> 512)
+    if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", ERDIO)
         return ERDIO
@@ -411,7 +410,7 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
         clust_nr := nxt_clust
 
     { write modified FAT back to disk }
-    if (status := write_fat(fat_sect) <> 512)
+    if ( write_fat(fat_sect) <> sd.WRITE_OK )
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", EWRIO)
         return EWRIO
@@ -810,11 +809,10 @@ PUB ftruncate(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
     clust_cnt := _fclust_tot
 
     if (clust_cnt > 1)                          ' if there's only one cluster, nothing here
-        status := read_fat(fat_sect)             '   needs to be done
-        if (status <> 512)
+        if ( read_fat(fat_sect) <> sd.READ_OK ) '   needs to be done
             'dlstrln(0, 0, ERR, @"read error")
             'dlprintf1(-1, 0, INFO, @"ftruncate() [ret: %d]\n\r", status)
-            return
+            return ERDIO
         'dlprintf1(0, 0, NORM, @"more than 1 cluster (%d)\n\r", clust_cnt)
         clust_nr := read_fat_entry(clust_nr)    ' immediately skip to the next cluster - make sure
         repeat clust_cnt                        '   the first one _doesn't_ get cleared out
@@ -825,10 +823,10 @@ PUB ftruncate(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
             clust_nr := nxt_clust
         write_fat_entry(ffirst_clust(), CLUST_EOC)
         { write modified FAT back to disk }
-        if (status := write_fat(fat_sect) <> 512)
+        if ( write_fat(fat_sect) <> sd.WRITE_OK )
             'dlstrln(0, 0, ERR, @"write error")
             'dlprintf1(-1, 0, INFO, @"ftruncate() [ret: %d]\n\r", status)
-            return
+            return EWRIO
 
     { set filesize to 0 }
     fset_size(0)
@@ -890,26 +888,24 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         { copy the next chunk of data to the sector buffer }
         bytemove((@_sect_buff+_fseek_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
         'dhexdump(@_sect_buff, 0, 4, 512, 16)
-        status := sd.wr_block(@_sect_buff, _fseek_sect)
-        if ( status <> sd.WRITE_OK )
+        if ( sd.wr_block(@_sect_buff, _fseek_sect) <> sd.WRITE_OK )
             'dlstrln(0, 0, ERR, @"write error")
             'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", EWRIO)
             return EWRIO
-        if ( status == sd.WRITE_OK )
-            { if written portion goes past the EOF, update the size (otherwise we're just
-                overwriting what's already there) }
-            'dlprintf1(0, 0, NORM, @"seek pos is %d\n\r", _fseek_pos)
-            'dlprintf1(0, 0, NORM, @"sect_wrsz is %d\n\r", sect_wrsz)
-            'dlprintf1(0, 0, NORM, @"file end is %d\n\r", fend())
-            if ( (_fseek_pos + sect_wrsz) > fsize() )
-                'dlprintf2(0, 0, WARN, @"updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
-                { remember, it was determined already whether more clusters needed to be allocated
-                    to accommodate the new size, so all that needs to be done here is update the
-                    size recorded in the dirent }
-                fset_size(fsize() + sect_wrsz)
-            { update position to advance by how much was just written }
-            fseek(_fseek_pos + sect_wrsz)
-            nr_left -= sect_wrsz
+        { if written portion goes past the EOF, update the size (otherwise we're just
+            overwriting what's already there) }
+        'dlprintf1(0, 0, NORM, @"seek pos is %d\n\r", _fseek_pos)
+        'dlprintf1(0, 0, NORM, @"sect_wrsz is %d\n\r", sect_wrsz)
+        'dlprintf1(0, 0, NORM, @"file end is %d\n\r", fend())
+        if ( (_fseek_pos + sect_wrsz) > fsize() )
+            'dlprintf2(0, 0, WARN, @"updating size from %d to %d\n\r", fsize(), fsize()+sect_wrsz)
+            { remember, it was determined already whether more clusters needed to be allocated
+                to accommodate the new size, so all that needs to be done here is update the
+                size recorded in the dirent }
+            fset_size(fsize() + sect_wrsz)
+        { update position to advance by how much was just written }
+        fseek(_fseek_pos + sect_wrsz)
+        nr_left -= sect_wrsz
     'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", status)
     dirent_update(fnumber())
 
