@@ -490,7 +490,7 @@ PUB find_free_dirent(): dirent_nr | endofdir, d
     d := 0
     repeat
         dirent_nr := d
-        d := next_file(0)
+        d := next_file()
     while ( d > 0 )
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
     'dlprintf1(-1, 0, INFO, @"find_free_dirent() [ret: %d]\n\r", dirent_nr+1)
@@ -913,9 +913,9 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", status)
     dirent_update(fnumber())
 
-PUB next_file(ptr_fn): fnr | fch
+PUB next_file(ptr_fn=0): fnr | fch
 ' Find next file in directory
-'   ptr_fn: pointer to copy name of next file found to (set 0 to ignore)
+'   ptr_fn: (optional) pointer to copy name of next file found to (omit or set 0 to ignore)
 '   Returns:
 '       directory entry # (0..15) of file
 '       ENOTFOUND (-2) if there are no more files
