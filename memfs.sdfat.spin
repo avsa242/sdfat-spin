@@ -618,7 +618,7 @@ PUB fopen_ent(file_nr, mode): status
     fcount_clust()
 
     if (mode & O_TRUNC)                         ' have to check for this first before any others
-        ftrunc()                                ' (don't want to truncate to 0 after checking size)
+        ftruncate()                                ' (don't want to truncate to 0 after checking size)
 
     if (mode & O_APPEND)
         mode |= O_WRITE                         ' in case it isn't already
@@ -801,10 +801,10 @@ PUB ftell(): pos
     'dlprintf1(-1, 0, INFO, @"ftell() [ret: %d]\n\r", _fseek_pos)
     return _fseek_pos
 
-PUB ftrunc(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
+PUB ftruncate(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
 ' Truncate open file to 0 bytes
     { except for the first one, clear the file's entire cluster chain to 0 }
-    'dlstrln(0, 1, INFO, @"ftrunc()")
+    'dlstrln(0, 1, INFO, @"ftruncate()")
     clust_nr := ffirst_clust()
     fat_sect := clust_num_to_fat_sect(clust_nr)
     clust_cnt := _fclust_tot
@@ -813,7 +813,7 @@ PUB ftrunc(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
         status := read_fat(fat_sect)             '   needs to be done
         if (status <> 512)
             'dlstrln(0, 0, ERR, @"read error")
-            'dlprintf1(-1, 0, INFO, @"ftrunc() [ret: %d]\n\r", status)
+            'dlprintf1(-1, 0, INFO, @"ftruncate() [ret: %d]\n\r", status)
             return
         'dlprintf1(0, 0, NORM, @"more than 1 cluster (%d)\n\r", clust_cnt)
         clust_nr := read_fat_entry(clust_nr)    ' immediately skip to the next cluster - make sure
@@ -827,7 +827,7 @@ PUB ftrunc(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
         { write modified FAT back to disk }
         if (status := write_fat(fat_sect) <> 512)
             'dlstrln(0, 0, ERR, @"write error")
-            'dlprintf1(-1, 0, INFO, @"ftrunc() [ret: %d]\n\r", status)
+            'dlprintf1(-1, 0, INFO, @"ftruncate() [ret: %d]\n\r", status)
             return
 
     { set filesize to 0 }
@@ -839,7 +839,7 @@ PUB ftrunc(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
     'dlstrln(0, NORM, @"updated FAT")
     'read_fat(0)
     'dhexdump(@_meta_buff, 0, 4, 512, 16)
-    'dlprintf1(-1, 0, INFO, @"ftrunc() [ret: %d]\n\r", status)
+    'dlprintf1(-1, 0, INFO, @"ftruncate() [ret: %d]\n\r", status)
 
 PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
 ' Write buffer to card
