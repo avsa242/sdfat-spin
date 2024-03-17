@@ -248,12 +248,12 @@ PUB dirent_update(dirent_nr): status
         return EWRIO
     'dlprintf1(-1, 0, INFO, @"dirent_update() [ret: %d]\n\r", status)
 
-PUB fallocate(): status | flc, cl_free, fat_sect
+PUB allocate_cluster(): status | flc, cl_free, fat_sect
 ' Allocate a new cluster for the currently opened file
-    'dlstrln(0, 1, INFO, @"fallocate()")
+    'dlstrln(0, 1, INFO, @"allocate_cluster()")
     ifnot (_file_nr)
         'dlstrln(0, 0, ERR, @"error: no file open")
-        'dlprintf1(-1, 0, INFO, @"fallocate() [ret: %d]\n\r", ENOTOPEN)
+        'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return ENOTOPEN
     { find last cluster # of file }
     flc := _fclust_last
@@ -263,7 +263,7 @@ PUB fallocate(): status | flc, cl_free, fat_sect
     cl_free := find_free_clust()
     if (cl_free < 0)
         'dlprintf1(0, 0, ERR, @"error %d\n\r", status)
-        'dlprintf1(-1, 0, INFO, @"fallocate() [ret: %d]\n\r", ENOTOPEN)
+        'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return cl_free
     'dlprintf1(0, 0, NORM, @"free cluster found: %x\n\r", cl_free)
 
@@ -271,19 +271,19 @@ PUB fallocate(): status | flc, cl_free, fat_sect
     fat_sect := clust_num_to_fat_sect(flc)
     if (read_fat(fat_sect) <> 512)
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
-        'dlprintf1(-1, 0, INFO, @"fallocate() [ret: %d]\n\r", ENOTOPEN)
+        'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return ERDIO
     write_fat_entry(flc, cl_free)
     if (status := write_fat(fat_sect) <> 512)
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
-        'dlprintf1(-1, 0, INFO, @"fallocate() [ret: %d]\n\r", ENOTOPEN)
+        'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", ENOTOPEN)
         return EWRIO
 
     { allocate/write EOC in the newly found free cluster and increment the total cluster count }
     status := alloc_clust(cl_free)
     _fclust_last := status
     _fclust_tot++
-    'dlprintf1(-1, 0, INFO, @"fallocate() [ret: %d]\n\r", status)
+    'dlprintf1(-1, 0, INFO, @"allocate_cluster() [ret: %d]\n\r", status)
 
 PUB fcount_clust(): t_clust | fat_entry, fat_sector, nxt_entry
 ' Count number of clusters used by currently open file
@@ -867,7 +867,7 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
             return EBADSEEK
         'dlstrln(0, 0, NORM, @"OK - opened for appending")
         'dlstrln(0, 0, WARN, @"allocating another cluster")
-        fallocate()                             ' if yes, then allocate another cluster
+        allocate_cluster()                      ' if yes, then allocate another cluster
 
     nr_left := len                              ' init to total write length
     repeat while (nr_left > 0)
