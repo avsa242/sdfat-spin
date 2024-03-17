@@ -58,7 +58,7 @@ VAR
     long _meta_sect                             ' sector # of last metadata read
     long _dir_sect
 
-    word _sect_offs
+    word _fseek_sect_offs
     word _last_free_dirent
 
     byte _sect_buff[sd.SECT_SZ]                 ' sector (data) buffer
@@ -669,8 +669,8 @@ PUB fread(ptr_dest, nr_bytes): nr_read | nr_left, movbytes, resp
 '            dlstrln(0, 0, INFO, @"current seek sector == prev seek sector; not re-reading")
 
         { copy as many bytes as possible from it into the user's buffer }
-        movbytes := sect_sz()-_sect_offs
-        bytemove(ptr_dest, (@_sect_buff+_sect_offs), movbytes <# nr_bytes)
+        movbytes := sect_sz()-_fseek_sect_offs
+        bytemove(ptr_dest, (@_sect_buff+_fseek_sect_offs), movbytes <# nr_bytes)
         nr_read := (nr_read + movbytes) <# nr_bytes
         nr_left := (nr_bytes - nr_read)
 
@@ -787,7 +787,7 @@ PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect
         also, set offset within sector to find the start of the data (0..bytes per sector-1) }
     _fseek_sect := (clust_to_sect(clust_nr) + rel_sect_nr)
     _fseek_pos := pos
-    _sect_offs := (pos // sect_sz())            ' record which (n'th) sector of the file this is
+    _fseek_sect_offs := (pos // sect_sz())      ' record which (n'th) sector of the file this is
     'dlprintf1(-1, 0, INFO, @"fseek() [ret: %d]\n\r", pos)
     return pos
 
@@ -873,8 +873,8 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
     repeat while (nr_left > 0)
         'dlprintf1(0, 0, NORM, @"nr_left = %d\n\r", nr_left)
         { how much of the total to write to this sector }
-        sect_wrsz := (sd.SECT_SZ - _sect_offs) <# nr_left
-        'dlprintf1(0, 0, NORM, @"_sect_offs = %d\n\r", _sect_offs)
+        sect_wrsz := (sd.SECT_SZ - _fseek_sect_offs) <# nr_left
+        'dlprintf1(0, 0, NORM, @"_fseek_sect_offs = %d\n\r", _fseek_sect_offs)
 
         if (_fmode & O_RDWR)                    ' read-modify-write mode
         { We can't simply write the new data to the sector - the card will actually
@@ -888,7 +888,7 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
                 return ERDIO
 
         { copy the next chunk of data to the sector buffer }
-        bytemove((@_sect_buff+_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
+        bytemove((@_sect_buff+_fseek_sect_offs), (ptr_buff+(len-nr_left)), sect_wrsz)
         'dhexdump(@_sect_buff, 0, 4, 512, 16)
         status := sd.wr_block(@_sect_buff, _fseek_sect)
         if ( status <> sd.WRITE_OK )
