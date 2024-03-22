@@ -57,12 +57,12 @@ VAR
 
     long _meta_sect                             ' sector # of last metadata read
     long _dir_sect
+    byte _meta_buff[sd.SECT_SZ]                 ' metadata buffer (must be long-aligned)
 
     word _fseek_sect_offs
     word _last_free_dirent
 
     byte _sect_buff[sd.SECT_SZ]                 ' sector (data) buffer
-    byte _meta_buff[sd.SECT_SZ]                 ' metadata buffer
     byte _meta_lastread                         ' type of last metadata read
     byte _curr_file
 
