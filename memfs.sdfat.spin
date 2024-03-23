@@ -392,7 +392,7 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
         return ENOTFOUND
 
     { rename file with first byte set to FATTR_DEL ($E5) }
-    fopen_ent(dirent, O_RDWR)
+    fopen(fn_str, O_RDWR)
     fset_deleted()
     dirent_update(dirent)
 
@@ -541,7 +541,7 @@ PUB find_last_clust(): cl_nr | fat_ent, resp, fat_sect
     'dlprintf1(-1, 0, INFO, @"find_last_clust() [ret: %d]\n\r", cl_nr)
     return cl_nr
 
-PUB fopen(fn_str, mode): status
+PUB fopen(fn_str, mode): status | d_nr, ffc
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
@@ -567,8 +567,37 @@ PUB fopen(fn_str, mode): status
 
     if ( status == ENOTFOUND )               ' file not found
         if ( mode & O_CREAT )                   ' create it, if the option is given
-            status := fcreate(fn_str, FATTR_ARC)
-            mode &= !O_CREAT                    ' strip off the create bit for fopen_ent()
+            { first, verify a file with the same name doesn't already exist }
+            if ( find(fn_str) <> ENOTFOUND )
+                return EEXIST
+
+            { find a free directory entry, and open it read/write }
+            d_nr := find_free_dirent()
+            if ( d_nr < 0 )
+                return ENOSPC
+            read_dirent(d_nr)                      ' mainly just to zero out anything that's there
+
+            { find a free cluster, starting at the beginning of the FAT }
+            ffc := find_free_clust()
+            if ( ffc < 3 )
+                return ENOSPC
+
+            _fmode := O_CREAT
+            { set up the file's initial metadata }
+            fset_fname(fn_str)
+            fset_ext(fn_str+9)   'XXX expects string at fn_str to be in '8.3' format, _with_ the period
+            fset_attrs(FATTR_ARC)
+            fset_size(0)
+            fset_date_created(_sys_date)
+            fset_time_created(_sys_time)
+            fset_first_clust(ffc)
+            dirent_update(d_nr)
+
+            { allocate a cluster }
+            alloc_clust(ffc)
+
+            mode &= !O_CREAT                    ' strip off the create bit
+            return d_nr
             if ( status < 0 )                   ' error creating dirent
                 'dlstrln(0, 0, ERR, @"error creating dirent")
                 'dlprintf1(-1, 0, INFO, @"fopen() [ret: %d]\n\r", status)
@@ -578,37 +607,23 @@ PUB fopen(fn_str, mode): status
             'dlprintf1(-1, 0, INFO, @"fopen() [ret: %d]\n\r", status)
             return ENOTFOUND
 
-    status := fopen_ent(status, mode)
-    'dlprintf1(-1, 0, INFO, @"fopen(): [ret %d]\n\r", status)
-
-PUB fopen_ent(file_nr, mode): status
-' Open file by dirent # for subsequent operations
-'   Valid values:
-'       file_nr: directory entry number
-'       mode: O_RDONLY (1), O_WRITE (2), O_RDWR (3)
-'   Returns:
-'       file number (dirent #) if successful,
-'       or error
-    'dlstrln(0, 1, INFO, @"fopen_ent():")
     if (fnumber() => 0)
         'dlprintf1(0, 0, WARN, @"file #%d already open\n\r", fnumber())
-        'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", EOPEN)
         return EOPEN
 
     'dlprintf2(0, 0, NORM, @"reading rootdir sect %d+%d...", root_dir_sect(),  dirent_to_sect(file_nr))
-    sd.rd_block(@_meta_buff, (root_dir_sect() + dirent_to_sect(file_nr)))
+    sd.rd_block(@_meta_buff, (root_dir_sect() + dirent_to_sect(d_nr)))
     _meta_lastread := META_DIR                  ' indicate metadata last read is of type directory
     'dlstrln(0, 0, NORM, @"read ok")
 
     { open the file }
-    read_dirent(file_nr & $0f)                  ' cache dirent metadata
+    read_dirent(d_nr & $0f)                  ' cache dirent metadata
     if (dirent_never_used())
         ifnot (mode & O_CREAT)                  ' need create bit set to open an unused dirent
             fclose()
             'dlstrln(0, 0, ERR, @"error: dirent unused")
-            'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", status)
             return ENOTFOUND
-    _file_nr := file_nr 'xxx hacky
+    _file_nr := d_nr 'xxx hacky
     'dhexdump(@_dirent, 0, 4, 32, 16)
     'dlprintf1(0, 0, NORM, @"opened file/dirent # %d\n\r", fnumber())
 
@@ -630,7 +645,6 @@ PUB fopen_ent(file_nr, mode): status
         _fseek_sect := ffirst_sect()             ' initialize current sector with file's first
     _fmode := mode
     'dlprintf2(0, 0, NORM, @"_fclust_tot: %d  clust_sz: %d\n\r", _fclust_tot, clust_sz())
-    'dlprintf1(-1, 0, INFO, @"fopen_ent() [ret: %d]\n\r", fnumber())
     return fnumber()
 
 PUB rdblock_lsbf = fread
@@ -733,7 +747,7 @@ PUB frename(fn_old, fn_new): status | dirent
         'dlprintf1(-1, 0, INFO, @"frename() [ret: %d]\n\r", EEXIST)
         return EEXIST
 
-    fopen_ent(dirent, O_RDWR)
+    fopen(fn_old, O_RDWR)
     fset_fname(fn_new)
     dirent_update(dirent)
     fclose()
