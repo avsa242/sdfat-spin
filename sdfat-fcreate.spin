@@ -26,7 +26,7 @@ OBJ
 DAT
 
     { filename to create must be 8.3 format; pad with spaces if less than full length }
-    _fname byte "TEST0001.TXT", 0
+    _fname byte "TEST0000.TXT", 0
 
 
 PUB main() | err, dirent

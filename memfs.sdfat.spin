@@ -328,9 +328,11 @@ PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
         return EEXIST
 
     { find a free directory entry, and open it read/write }
-    if ( _last_free_dirent )
+'    if ( _last_free_dirent )
         'dlprintf1(0, 0, NORM, @"using dirent #%d\n\r", _last_free_dirent)
-        dirent_nr := _last_free_dirent
+'        dirent_nr := _last_free_dirent
+    dirent_nr := find_free_dirent()
+    'xxx catch err
 
     read_dirent(dirent_nr)                      ' mainly just to zero out anything that's there
     'dlprintf1(0, 0, NORM, @"found dirent # %d\n\r", dirent_nr)
@@ -421,35 +423,42 @@ PUB file_size(): sz
 ' Get size of opened file
     return fsize()
 
-PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp, fn_tmp[4], d
-' Find file, by name
-'   Valid values:
-'       ptr_str: pointer to space-padded string containing filename (8.3)
-'   Returns:
-'       directory entry of file (0..n)
-'       or ENOTFOUND (-2) if not found
-    'dlstrln(0, 1, NORM, @"find():")
-    dirent := 0
-    rds := 0
-    endofdir := false
 
-    { get filename and extension, and convert to uppercase }
-    'dlprintf1(0, 0, INFO, @"Looking for %s\n\r", ptr_str)
+PUB find(p_str): d | ffnl, fnl, byte fn_tmp[13]
+' Find a file, by name (case insensitive)
+'   p_str: string containing a filename
+'   NOTE: The filename must meet these conditions:
+'       * length is 1 to 8 chars (the name will be space-padded, if less than 8)
+'       * contains a "."
+'       * contains a 3-char suffix/extension
+    d := 0
     opendir(0)
-    repeat
-        longfill(@fn_tmp, 0, 4)
-        d := next_file(@fn_tmp)
-        if ( d < 0 )
-            'dlstrln(0, 0, NORM, @"not found")
-            quit
-        'dlprintf1(0, 0, NORM, @"checking dirent %d\n\r", d)
-        'dlprintf2(0, 0, NORM, @"dirent's filename is %s.%s\n\r", fname(), fname_ext())
-        if ( strcomp(ptr_str, dirent_filename(@fn_tmp)) )
-            'dlstrln(0, 0, WARN, @"match found")
-            'dlprintf1(-1, 0, INFO, @"find() [ret: %d]\n\r", d)
+
+    if ( (str.findchar(p_str, ".") == 0) or (strsize(p_str) > 12) )
+        return EINVAL                           ' invalid filename; no "." or name too long
+
+    ffnl := strsize(p_str)                      ' full filename length
+    bytefill(@fn_tmp, 0, 13)
+
+    if ( ffnl < 12 )
+        { shorter than 12 chars - need to space-pad the filename }
+        fnl := ffnl-4                                   ' filename only length
+        bytemove(@fn_tmp, str.left(p_str, fnl, 0), fnl) ' copy the filename provided
+        bytefill(@fn_tmp+fnl, 32, (8-fnl))              ' pad with spaces
+        bytemove(@fn_tmp+8, str.right(p_str, 3, 0), 3)  ' copy the suffix, without the "."
+        str.clear_scratch_buff()
+    else
+        bytemove(@fn_tmp, p_str, 8)
+        bytemove(@fn_tmp+8, p_str+9, 3)
+
+    repeat d from 0 to 15
+        { do a case-insensitive comparison of the filename to each directory entry }
+        if ( (str.compare(@fn_tmp, dirent_name(d), 0) == 0) )
             return d
-    'dlprintf1(-1, 0, INFO, @"find() [ret: %d]\n\r", ENOTFOUND)
+        str.clear_scratch_buff()
+
     return ENOTFOUND
+
 
 CON FREE = 0
 PUB find_free_clust(): cl_nr | clst, fat_s, st, fat_s_l
