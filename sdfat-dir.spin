@@ -19,7 +19,7 @@ OBJ
 
     cfg:    "boardcfg.flip"
     ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sd:     "memfs.sdfat" | CS=3, SCK=1, MOSI=2, MISO=0
+    sd:     "memfs.sdfat" | CS=22+3, SCK=22+1, MOSI=22+2, MISO=22+0
     time:   "time"
 
 

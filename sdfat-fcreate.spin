@@ -20,13 +20,13 @@ OBJ
     cfg:    "boardcfg.flip"
     time:   "time"
     ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sd:     "memfs.sdfat" | CS=0, SCK=1, MOSI=2, MISO=3
+    sd:     "memfs.sdfat" | CS=22+3, SCK=22+1, MOSI=22+2, MISO=22+0'CS=0, SCK=1, MOSI=2, MISO=3
 
 
 DAT
 
     { filename to create must be 8.3 format; pad with spaces if less than full length }
-    _fname byte "TEST0000.TXT", 0
+    _fname byte "TEST0001.TXT", 0
 
 
 PUB main() | err, dirent

@@ -17,10 +17,10 @@ CON
 
 OBJ
 
-    cfg:    "boardcfg.flip"
+    cfg:    "boardcfg.activity"
     time:   "time"
     ser:    "com.serial.terminal.ansi" | SER_BAUD=115_200
-    sd:     "memfs.sdfat" | CS=0, SCK=1, MOSI=2, MISO=3
+    sd:     "memfs.sdfat" | CS=cfg.SD_CS, SCK=cfg.SD_SCK, MOSI=cfg.SD_MOSI, MISO=cfg.SD_MISO
 
 
 PUB main() | err
@@ -30,6 +30,7 @@ PUB main() | err
     dir()
     ser.strln(@"press any key to delete")
     ser.getchar()
+    ser.strln(@"deleting...")
     err := sd.fdelete(@"TEST0000.TXT")
     if (err < 1)
         perror(@"Error deleting: ", err)

@@ -451,35 +451,29 @@ PUB find(ptr_str): dirent | rds, endofdir, name_tmp[3], ext_tmp, fn_tmp[4], d
     'dlprintf1(-1, 0, INFO, @"find() [ret: %d]\n\r", ENOTFOUND)
     return ENOTFOUND
 
-CON FREE_CLUST = 0
-PUB find_free_clust(): f | fat_sector, fat_entry, fat_sect_entry
+CON FREE = 0
+PUB find_free_clust(): cl_nr | clst, fat_s, st, fat_s_l
 ' Find a free cluster
-    'dlstrln(0, 1, INFO, @"find_free_clust():")
-    fat_sector := fat1_start()                  ' start at first sector of first FAT
-    fat_sect_entry := 3                         ' skip reserved, root dir, and vol label entries
+'   Returns: free cluster number if found, or ENOSPC if none are found
+    cl_nr := 3                                  ' init to cluster 3 (skip reserved clusters)
+    fat_s := clust_num_to_fat_sect(cl_nr)       '   on first sector of FAT
+    fat_s_l := (fat1_start() + sects_per_fat())-1
 
-    repeat                                      ' for each FAT sector (relative to 1st)...
-        'dlprintf1(0, 0, NORM, @"reading FAT sector %d\n\r", fat_sector)
-        read_fat(fat_sector-fat1_start())
-        repeat                                  '   for each FAT entry...
-            { get absolute FAT entry }
-            { fat sector from the fat_entry's point of view is relative to the start of the FAT,
-                NOT an absolute sector number }
-            'dlprintf2(0, 0, NORM, @"fat_sector = %d\tfat1_start() = %d\n\r", fat_sector, fat1_start())
-            fat_entry := ( ((fat_sector-fat1_start()) * 128) + fat_sect_entry )
-            'dlprintf1(0, 0, NORM, @"fat_entry = %02.2x\n\r", fat_entry)
-            if ( read_fat_entry(fat_sect_entry) == FREE_CLUST )
-                'dlprintf1(0, 0, WARN, @"found free entry %02.2x\n\r", fat_entry)
-                'dlprintf1(-1, 0, INFO, @"find_free_clust() [ret: %d]\n\r", fat_entry)
-                return fat_entry                ' return the absolute FAT entry #
-            fat_sect_entry++                    ' otherwise, continue on
-        while ( fat_sect_entry < 128 )
-        fat_sector++
-        'dlprintf1(0, 0, NORM, @"next sector (%08x)\n\r", fat_sector)
-    while ( fat_sector < (fat1_start() + sects_per_fat()) )
+    repeat
+        st := read_fat(fat_s)                   ' read current FAT sector
+        if ( st <> sd.READ_OK )
+            abort st                            ' read error
+        repeat
+            if ( read_fat_entry(cl_nr) == FREE )' read FAT entry at cluster
+                cl_nr := (128 * fat_s) + cl_nr  ' convert to absolute cluster number
+                return cl_nr
+        while ( ++cl_nr < 128 )                 ' end of FAT sector
+        cl_nr := 0
+        fat_s++                                 ' go to next sector
+    while ( fat_s =< fat_s_l )
 
-    'dlprintf1(-1, 0, INFO, @"find_free_clust() [ret: %d]\n\r", ENOSPC)
-    return ENOSPC                               ' no free clusters
+    abort ENOSPC                                ' no free clusters
+
 
 PUB find_free_dirent(): dirent_nr | endofdir, d
 ' Find free directory entry
