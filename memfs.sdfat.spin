@@ -4,7 +4,7 @@
     Description:    FAT32-formatted SDHC/XC driver
     Author:         Jesse Burt
     Started:        Jun 11, 2022
-    Updated:        Mar 11, 2024
+    Updated:        Mar 24, 2024
     Copyright (c) 2024 - See end of file for terms of use.
 ---------------------------------------------------------------------------------------------------
 }
@@ -69,7 +69,7 @@ VAR
 DAT
 
     _sys_date word ( ((2024-1980) << 9) | (3 << 5) | 24 )
-    _sys_time word ( (07 << 11) | (38 << 5) | 00 )
+    _sys_time word ( (18 << 11) | (29 << 5) | 00 )
 
 OBJ
 
@@ -322,38 +322,14 @@ PUB fdelete(fn_str): status | d, clust_nr, fat_sect, nxt_clust, tmp
 '   Returns:
 '       existing directory entry number on success
 '       negative numbers on failure
-    'dlstrln(0, 1, INFO, @"fdelete()")
-    { verify file exists }
-    'dlprintf1(0, 0, NORM, @"about to look for %s\n\r", fn_str)
-    { rename file with first byte set to FATTR_DEL ($E5) }
-    d := fopen(fn_str, O_RDWR)
+    d := find(fn_str)                           ' make sure the file to delete exists
     if ( d < 0 )
-        return d                                ' error (most likely file not found)
-    fset_deleted()
-    dirent_update(d)
+        return d
 
-    { clear the file's entire cluster chain to 0 }
-    clust_nr := ffirst_clust()
-    fat_sect := clust_num_to_fat_sect(clust_nr)
-    if ( read_fat(fat_sect) <> sd.READ_OK )
-        'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
-        'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", ERDIO)
-        return ERDIO
+    byte[fn_str][0] := FATTR_DEL
+    set_dirent_name(d, fnstr_to_dirent(fn_str)) ' change the name and write the table back to disk
+    return sd.wr_block(@_meta_buff, dirent_to_abs_sect(d))
 
-    repeat ftotal_clust()
-        { read next entry in chain before clearing the current one - need to know where
-            to go to next beforehand }
-        nxt_clust := read_fat_entry(clust_nr)
-        write_fat_entry(clust_nr, 0)
-        clust_nr := nxt_clust
-
-    { write modified FAT back to disk }
-    if ( write_fat(fat_sect) <> sd.WRITE_OK )
-        'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
-        'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", EWRIO)
-        return EWRIO
-    'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", dirent)
-    return d
 
 PUB file_size(): sz
 ' Get size of opened file
