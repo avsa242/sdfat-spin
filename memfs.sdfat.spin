@@ -68,8 +68,8 @@ VAR
 
 DAT
 
-    _sys_date word ( ((2023-1980) << 9) | (7 << 5) | 3 )
-    _sys_time word ( (18 << 11) | (25 << 5) | 00 )
+    _sys_date word ( ((2024-1980) << 9) | (3 << 5) | 24 )
+    _sys_time word ( (07 << 11) | (38 << 5) | 00 )
 
 OBJ
 
@@ -541,7 +541,7 @@ PUB find_last_clust(): cl_nr | fat_ent, resp, fat_sect
     'dlprintf1(-1, 0, INFO, @"find_last_clust() [ret: %d]\n\r", cl_nr)
     return cl_nr
 
-PUB fopen(fn_str, mode): status | d_nr, ffc
+PUB fopen(fn_str, mode): d | ffc
 ' Open file for subsequent operations
 '   Valid values:
 '       fn_str: pointer to string containing filename (must be space padded)
@@ -556,95 +556,61 @@ PUB fopen(fn_str, mode): status | d_nr, ffc
 '   Returns:
 '       file number (dirent #) if successful,
 '       or error
-    'dlstrln(0, 1, INFO, @"fopen()")
-    if ( fnumber() => 0 )                       ' file is already open
-        'dlstrln(0, 0, ERR, @"error: already open") 'xxx bit of duplication with FOpenEnt()
-        'dlprintf1(-1, 0, INFO, @"fopen() [ret: %d]\n\r", EOPEN)
+    if ( fnumber() => 0 )                       ' error: a file is already open
         return EOPEN
 
-    status := find(fn_str)                   ' look for file by name
-    'dlprintf1(0, 0, NORM, @"found file, dirent # %d\n\r", status)
+    d := find(fn_str)                           ' look for the file by name
 
-    if ( status == ENOTFOUND )               ' file not found
-        if ( mode & O_CREAT )                   ' create it, if the option is given
-            { first, verify a file with the same name doesn't already exist }
-            if ( find(fn_str) <> ENOTFOUND )
-                return EEXIST
-
-            { find a free directory entry, and open it read/write }
-            d_nr := find_free_dirent()
-            if ( d_nr < 0 )
+    { no file with that name was found; it could be that we're trying to create a new file,
+        or it could simply mean that it doesn't exist }
+    if ( d == ENOTFOUND )                       ' couldn't find the file:
+        if ( mode & O_CREAT )                   '   are we trying to create it?
+            d := find_free_dirent()             ' find a free directory entry
+            if ( d < 0 )
                 return ENOSPC
-            read_dirent(d_nr)                      ' mainly just to zero out anything that's there
+            clear_dirent()
 
-            { find a free cluster, starting at the beginning of the FAT }
-            ffc := find_free_clust()
+            ffc := find_free_clust()            ' find a free cluster to use as the file's first
             if ( ffc < 3 )
-                return ENOSPC
+                return ENOSPC                   ' error: none found
 
-            _fmode := O_CREAT
-            { set up the file's initial metadata }
-            fset_fname(fn_str)
-            fset_ext(fn_str+9)   'XXX expects string at fn_str to be in '8.3' format, _with_ the period
+            set_filename(fn_str)
             fset_attrs(FATTR_ARC)
             fset_size(0)
             fset_date_created(_sys_date)
             fset_time_created(_sys_time)
             fset_first_clust(ffc)
-            dirent_update(d_nr)
-
-            { allocate a cluster }
-            alloc_clust(ffc)
-
+            dirent_update(d)                    ' sync dirent to disk
+            alloc_clust(ffc)                    ' allocate the cluster we found
             mode &= !O_CREAT                    ' strip off the create bit
-            return d_nr
-            if ( status < 0 )                   ' error creating dirent
-                'dlstrln(0, 0, ERR, @"error creating dirent")
-                'dlprintf1(-1, 0, INFO, @"fopen() [ret: %d]\n\r", status)
-                return
+            return d
         else
-            'dlstrln(0, 0, ERR, @"error: not found (and O_CREAT wasn't specified)")
-            'dlprintf1(-1, 0, INFO, @"fopen() [ret: %d]\n\r", status)
-            return ENOTFOUND
+            return ENOTFOUND                    ' error: file not found
 
-    if (fnumber() => 0)
-        'dlprintf1(0, 0, WARN, @"file #%d already open\n\r", fnumber())
-        return EOPEN
+    { if we got here, it means a file with that name _was_ found }
+    if ( mode & O_CREAT )                       ' error: file already exists
+        return EEXIST
 
-    'dlprintf2(0, 0, NORM, @"reading rootdir sect %d+%d...", root_dir_sect(),  dirent_to_sect(file_nr))
-    sd.rd_block(@_meta_buff, (root_dir_sect() + dirent_to_sect(d_nr)))
-    _meta_lastread := META_DIR                  ' indicate metadata last read is of type directory
-    'dlstrln(0, 0, NORM, @"read ok")
-
-    { open the file }
-    read_dirent(d_nr & $0f)                  ' cache dirent metadata
-    if (dirent_never_used())
-        ifnot (mode & O_CREAT)                  ' need create bit set to open an unused dirent
-            fclose()
-            'dlstrln(0, 0, ERR, @"error: dirent unused")
-            return ENOTFOUND
-    _file_nr := d_nr 'xxx hacky
-    'dhexdump(@_dirent, 0, 4, 32, 16)
-    'dlprintf1(0, 0, NORM, @"opened file/dirent # %d\n\r", fnumber())
+    read_dirent(d)                              ' cache dirent metadata
+    _file_nr := d 'xxx read_dirent() has this commented out. Why?
 
     { set up the initial state:
-        * set the seek pointer to the file's beginning
+        * set the seek pointer according to the file open mode
         * cache the file's open mode
         * cache the file's last cluster number; it'll be used later if more need to be
             allocated }
     fcount_clust()
 
-    if (mode & O_TRUNC)                         ' have to check for this first before any others
-        ftruncate()                                ' (don't want to truncate to 0 after checking size)
+    if ( mode & O_TRUNC )                       ' check for this first before any others to
+        ftruncate()                             '   avoid unnecessary seeking before truncation
 
-    if (mode & O_APPEND)
-        mode |= O_WRITE                         ' in case it isn't already
-        fseek(fsize())                          ' init seek pointer to end of file
+    if ( mode & O_APPEND )
+        mode |= O_WRITE                         ' append implies writing
+        fseek( fsize() )                        ' init seek pointer to end of file
     else
         _fseek_pos := 0
-        _fseek_sect := ffirst_sect()             ' initialize current sector with file's first
+        _fseek_sect := ffirst_sect()            ' initialize current sector with file's first
     _fmode := mode
-    'dlprintf2(0, 0, NORM, @"_fclust_tot: %d  clust_sz: %d\n\r", _fclust_tot, clust_sz())
     return fnumber()
 
 PUB rdblock_lsbf = fread
@@ -937,7 +903,7 @@ PUB next_file(ptr_fn=0): fnr | fch
     fnr := 0
     if ( ++_curr_file > 15 )                    ' last dirent in sector; go to next sector
         'dlstrln(0, 0, NORM, @"last dirent")
-        if ( ++_dir_sect =< _rootdirend )
+        if ( ++_dir_sect =< _rootdir_end )
             'dlprintf1(0, 0, NORM, @"next dir sector (%d)\n\r", _dir_sect)
             sd.rd_block( @_meta_buff, _dir_sect )
             _meta_lastread := META_DIR
