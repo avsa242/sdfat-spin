@@ -588,11 +588,16 @@ PUB fopen(fn_str, mode): d | ffc
             return ENOTFOUND                    ' error: file not found
 
     { if we got here, it means a file with that name _was_ found }
-    if ( mode & O_CREAT )                       ' error: file already exists
-        return EEXIST
+    if ( mode & O_CREAT )                       ' error: trying to create a file when one with
+        return EEXIST                           '   the requested name already exists
 
     read_dirent(d)                              ' cache dirent metadata
     _file_nr := d 'xxx read_dirent() has this commented out. Why?
+
+    if ( (mode & O_WRITE) or (mode & O_APPEND) )
+        if ( fattrs() & FATTR_WRPROT )          ' error: trying to open a file for writing when
+            return EWRONGMODE                   '   it has the write-protect attribute set
+
 
     { set up the initial state:
         * set the seek pointer according to the file open mode
