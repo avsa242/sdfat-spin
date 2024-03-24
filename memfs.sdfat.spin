@@ -640,21 +640,19 @@ PUB frename(fn_old, fn_new): d
 '   Returns:
 '       dirent # of file on success
 '       negative numbers on error
-    d := find(fn_old)                           ' make sure the file to rename exists
-    if ( d < 0 )
-        return d
-
     d := find(fn_new)
     if ( d => 0 )                               ' make sure there isn't already a file with
         return EEXIST                           '   the requested new name
 
-    d := fopen(fn_old, O_RDWR)
+    { find() the original file last so the correct directory table sector is already in RAM
+        for the rename }
+    d := find(fn_old)                           ' make sure the file to rename exists
     if ( d < 0 )
-        return d                                ' error opening file
+        return d
 
-    set_filename(fnstr_to_dirent(fn_new))       ' change the name
-    dirent_update(d)                            ' commit to disk
-    fclose()
+    set_dirent_name(d, fnstr_to_dirent(fn_new)) ' change the name and write the table back to disk
+    return sd.wr_block(@_meta_buff, dirent_to_abs_sect(d))
+
 
 PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
@@ -772,6 +770,7 @@ PUB fwrite(ptr_buff, len): status | sect_wrsz, nr_left, resp
         'dlstrln(0, 0, ERR, @"no file open")
         'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", ENOTOPEN)
         return ENOTOPEN                         ' no file open
+
     ifnot (_fmode & O_WRITE)
         'dlstrln(0, 0, ERR, @"bad file mode")
         'dlprintf1(-1, 0, INFO, @"fwrite() [ret: %d]\n\r", EWRONGMODE)
