@@ -316,66 +316,6 @@ PUB fcount_clust(): t_clust | fat_entry, fat_sector, nxt_entry
     while ( fat_sector < (fat1_start() + sects_per_fat()) )
     'dlprintf1(-1, 0, INFO, @"fcount_clust() [ret: %d]\n\r", t_clust)
  
-PUB fcreate(fn_str, attrs): status | dirent_nr, ffc
-' Create file
-'   fn_str: pointer to string containing filename
-'   attrs: initial file attributes
-    'dlstrln(0, 1, INFO, @"fcreate()")
-    { first, verify a file with the same name doesn't already exist }
-    if ( find(fn_str) <> ENOTFOUND )
-        'dlstrln(0, 0, ERR, @"error: file already exists")
-        'dlprintf1(-1, 0, INFO, @"fcreate() [ret: %d]\n\r", EEXIST)
-        return EEXIST
-
-    { find a free directory entry, and open it read/write }
-'    if ( _last_free_dirent )
-        'dlprintf1(0, 0, NORM, @"using dirent #%d\n\r", _last_free_dirent)
-'        dirent_nr := _last_free_dirent
-    dirent_nr := find_free_dirent()
-    'xxx catch err
-
-    read_dirent(dirent_nr)                      ' mainly just to zero out anything that's there
-    'dlprintf1(0, 0, NORM, @"found dirent # %d\n\r", dirent_nr)
-
-    { find a free cluster, starting at the beginning of the FAT }
-    ffc := find_free_clust()
-    'dlprintf2(0, 0, NORM, @"first free cluster: %x (%d)\n\r", ffc, ffc)
-    if ( ffc < 3 )
-        'dlstrln(0, 0, ERR, @"no free clusters")
-        'dlprintf1(-1, 0, INFO, @"fcreate() [ret: %d]\n\r", ENOSPC)
-        return ENOSPC
-    'dlprintf1(0, 0, NORM, @"fmode = %x\n\r", _fmode)
-
-    _fmode := O_CREAT
-    { set up the file's initial metadata }
-    'dlstrln(0, 0, NORM, @"setting up dirent")
-    fset_fname(fn_str)
-    fset_ext(fn_str+9)   'XXX expects string at fn_str to be in '8.3' format, _with_ the period
-    fset_attrs(attrs)
-    fset_size(0)
-    fset_date_created(_sys_date)
-    fset_time_created(_sys_time)
-    fset_first_clust(ffc)
-    dirent_update(dirent_nr)
-    'dhexdump(@_dirent, 0, 4, DIRENT_LEN, 16)
-{
-    dlstr(0, 0, NORM, @"file mode is: ")
-    if (_fmode & O_RDONLY)
-        dstr(@" O_RDONLY")'xxx
-    if (_fmode & O_WRITE)
-        dstr(@" O_WRITE")'xxx
-    if (_fmode & O_CREAT)
-        dstr(@" O_CREAT")
-    if (_fmode & O_APPEND)
-        dstr(@" O_APPEND")
-    dnewline()
-}
-    { allocate a cluster }
-    alloc_clust(ffc)
-
-    'dlprintf1(-1, 0, INFO, @"fcreate(): [ret %d]", dirent_nr)
-    return dirent_nr
-
 PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
 ' Delete a file
 '   fn_str: pointer to string containing filename
