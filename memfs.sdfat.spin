@@ -316,7 +316,7 @@ PUB fcount_clust(): t_clust | fat_entry, fat_sector, nxt_entry
     while ( fat_sector < (fat1_start() + sects_per_fat()) )
     'dlprintf1(-1, 0, INFO, @"fcount_clust() [ret: %d]\n\r", t_clust)
  
-PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
+PUB fdelete(fn_str): status | d, clust_nr, fat_sect, nxt_clust, tmp
 ' Delete a file
 '   fn_str: pointer to string containing filename
 '   Returns:
@@ -325,16 +325,12 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
     'dlstrln(0, 1, INFO, @"fdelete()")
     { verify file exists }
     'dlprintf1(0, 0, NORM, @"about to look for %s\n\r", fn_str)
-    dirent := find(fn_str)
-    if (dirent < 0)
-        'dlstrln(0, 0, ERR, @"not found")
-        'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", ENOTFOUND)
-        return ENOTFOUND
-
     { rename file with first byte set to FATTR_DEL ($E5) }
-    fopen(fn_str, O_RDWR)
+    d := fopen(fn_str, O_RDWR)
+    if ( d < 0 )
+        return d                                ' error (most likely file not found)
     fset_deleted()
-    dirent_update(dirent)
+    dirent_update(d)
 
     { clear the file's entire cluster chain to 0 }
     clust_nr := ffirst_clust()
@@ -357,7 +353,7 @@ PUB fdelete(fn_str): status | dirent, clust_nr, fat_sect, nxt_clust, tmp
         'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", EWRIO)
         return EWRIO
     'dlprintf1(-1, 0, INFO, @"fdelete() [ret: %d]\n\r", dirent)
-    return dirent
+    return d
 
 PUB file_size(): sz
 ' Get size of opened file
