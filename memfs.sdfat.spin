@@ -574,7 +574,7 @@ PUB fopen(fn_str, mode): d | ffc
             if ( ffc < 3 )
                 return ENOSPC                   ' error: none found
 
-            set_filename(fn_str)
+            set_filename(fnstr_to_dirent(fn_str))
             fset_attrs(FATTR_ARC)
             fset_size(0)
             fset_date_created(_sys_date)
