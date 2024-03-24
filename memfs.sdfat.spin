@@ -633,32 +633,28 @@ pub rd_long(): l
     fread(@l, 4)
 
 
-PUB frename(fn_old, fn_new): status | dirent
+PUB frename(fn_old, fn_new): d
 ' Rename file
-'   fn_old: existing filename
+'   fn_old: name of the existing file
 '   fn_new: new filename
 '   Returns:
 '       dirent # of file on success
 '       negative numbers on error
-    'dlstrln(0, 1, INFO, @"frename()")
-    { verify existence of file }
-    dirent := find(fn_old)
-    if (dirent < 0)
-        'dlstrln(0, 0, ERR, @"file not found")
-        'dlprintf1(-1, 0, INFO, @"frename() [ret: %d]\n\r", ENOTFOUND)
+    d := find(fn_old)                           ' make sure the file to rename exists
+    if ( d < 0 )
         return ENOTFOUND
 
-    { verify new filename is valid }
-    if (strcomp(fn_old, fn_new))
-        'dlstrln(0, 0, ERR, @"file with that name already exists")
-        'dlprintf1(-1, 0, INFO, @"frename() [ret: %d]\n\r", EEXIST)
-        return EEXIST
+    d := find(fn_new)
+    if ( d => 0 )                               ' make sure there isn't already a file with
+        return EEXIST                           '   the requested new name
 
-    fopen(fn_old, O_RDWR)
-    fset_fname(fn_new)
-    dirent_update(dirent)
+    d := fopen(fn_old, O_RDWR)
+    if ( d < 0 )
+        return d                                ' error opening file
+
+    set_filename(fnstr_to_dirent(fn_new))       ' change the name
+    dirent_update(d)                            ' commit to disk
     fclose()
-    'dlprintf1(-1, 0, INFO, @"frename() [ret: %d]\n\r", status)
 
 PUB fseek(pos): status | seek_clust, clust_offs, rel_sect_nr, clust_nr, fat_sect, sect_offs
 ' Seek to position in currently open file
