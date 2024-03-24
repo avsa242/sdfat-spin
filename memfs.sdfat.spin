@@ -642,7 +642,7 @@ PUB frename(fn_old, fn_new): d
 '       negative numbers on error
     d := find(fn_old)                           ' make sure the file to rename exists
     if ( d < 0 )
-        return ENOTFOUND
+        return d
 
     d := find(fn_new)
     if ( d => 0 )                               ' make sure there isn't already a file with
@@ -724,6 +724,9 @@ PUB ftruncate(): status | clust_nr, fat_sect, clust_cnt, nxt_clust
 ' Truncate open file to 0 bytes
     { except for the first one, clear the file's entire cluster chain to 0 }
     'dlstrln(0, 1, INFO, @"ftruncate()")
+    if ( fnumber() < 0 )
+        return ENOTOPEN
+
     clust_nr := ffirst_clust()
     fat_sect := clust_num_to_fat_sect(clust_nr)
     clust_cnt := _fclust_tot
