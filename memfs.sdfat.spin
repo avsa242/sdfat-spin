@@ -4,7 +4,7 @@
     Description:    FAT32-formatted SDHC/XC driver
     Author:         Jesse Burt
     Started:        Jun 11, 2022
-    Updated:        Mar 24, 2024
+    Updated:        Mar 25, 2024
     Copyright (c) 2024 - See end of file for terms of use.
 ---------------------------------------------------------------------------------------------------
 }
@@ -143,20 +143,20 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
         { must be opened for writing, or newly created }
         'dlstrln(0, 0, ERR, @"bad file mode")
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", EWRONGMODE)
-        return EWRONGMODE
+        abort EWRONGMODE
 
     { read FAT sector }
     fat_sect := clust_num_to_fat_sect(cl_nr)
     if ( read_fat(fat_sect) <> sd.READ_OK )
         'dlprintf1(0, 0, ERR, @"read error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", ERDIO)
-        return ERDIO
+        abort ERDIO
 
     { check the requested cluster number - is it free? }
     if ( read_fat_entry(cl_nr) <> 0 )
         'dlstrln(0, 0, ERR, @"cluster in use")
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", ECL_INUSE)
-        return ECL_INUSE
+        abort ECL_INUSE
 
     { write the EOC marker into the newly allocated entry }
     write_fat_entry(cl_nr, CLUST_EOC)
@@ -167,7 +167,7 @@ PUB alloc_clust(cl_nr): status | tmp, fat_sect
     if ( write_fat(fat_sect) <> sd.WRITE_OK )
         'dlprintf1(0, 0, ERR, @"write error %d\n\r", status)
         'dlprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", EWRIO)
-        return EWRIO
+        abort EWRIO
 
     'dprintf1(-1, 0, INFO, @"alloc_clust() [ret: %d]\n\r", cl_nr)
     return cl_nr
@@ -493,6 +493,7 @@ PUB fopen(fn_str, mode): d | ffc
             fset_time_created(_sys_time)
             fset_first_clust(ffc)
             dirent_update(d)                    ' sync dirent to disk
+            _fmode := mode
             alloc_clust(ffc)                    ' allocate the cluster we found
             mode &= !O_CREAT                    ' strip off the create bit
             return d

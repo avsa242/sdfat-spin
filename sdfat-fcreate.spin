@@ -33,7 +33,7 @@ PUB main() | err, dirent
 
     setup()
 
-    dirent := sd.fopen(@_fname, sd.O_CREAT | sd.O_APPEND)
+    dirent := \sd.fopen(@_fname, sd.O_CREAT | sd.O_APPEND)
     if (dirent < 0)
         perror(@"Error creating file: ", dirent)
         repeat
